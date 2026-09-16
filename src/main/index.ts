@@ -1,6 +1,8 @@
 import { BrowserWindow, app, session, shell } from 'electron'
 import { join } from 'node:path'
+import { AuthController } from './auth/controller'
 import { EngineHost } from './engine-host'
+import { IpcChannel } from '../shared/ipc'
 import { registerIpcHandlers } from './ipc'
 import { mainWindowOptions } from './window'
 
@@ -8,6 +10,7 @@ import { mainWindowOptions } from './window'
 app.enableSandbox()
 
 const engineHost = new EngineHost()
+let auth: AuthController | null = null
 const smokeMode = process.env.PW_SMOKE === '1'
 
 function createWindow(): BrowserWindow {
@@ -47,10 +50,23 @@ void app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
 
-  registerIpcHandlers(engineHost)
+  auth = new AuthController({ storePath: join(app.getPath('userData'), 'auth.enc') })
+  auth.onState((state) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IpcChannel.authStateChanged, state)
+    }
+  })
+
+  registerIpcHandlers(engineHost, auth)
   engineHost.start()
   createWindow()
   console.log('[pw] window created')
+
+  // Restore persisted auth (local file + refresh if needed). Network only
+  // happens when a previous session left a refresh token behind.
+  void auth.init().catch((err: unknown) => {
+    console.error(`[pw] auth init failed: ${String(err)}`)
+  })
 
   // Startup self-check of the full renderer→main→engine loop. Also the CI
   // smoke signal (PW_SMOKE=1 quits right after).
@@ -74,4 +90,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => engineHost.stop())
+app.on('before-quit', () => {
+  engineHost.stop()
+  auth?.dispose()
+})

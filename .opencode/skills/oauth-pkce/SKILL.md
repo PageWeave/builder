@@ -1,44 +1,55 @@
 ---
 name: oauth-pkce
-description: PageWeave OAuth sign-in for this app — RFC 8252 loopback flow in a public client with PKCE, system browser via shell.openExternal, short-lived local HTTP callback server, safeStorage token persistence, refresh in main, secrets never in renderer. Use when working on sign-in/sign-out (M2), token storage/refresh, the loopback callback server, or anything touching OAuth tokens or client registration.
+description: PageWeave OAuth sign-in for this app (M2, implemented) — openid-client 6.8.8 in main, RFC 7591 dynamic client registration once per install, RFC 8252 loopback flow with ephemeral port, PKCE S256, safeStorage-only persistence, single-flight refresh, RFC 7009 revocation. Use when working on sign-in/sign-out, token storage/refresh, the loopback callback server, getAccessToken (M3 engine surface), or anything touching OAuth tokens or client registration.
 ---
 
-# OAuth (PageWeave, public client + PKCE) — M2
+# OAuth (PageWeave, public client + PKCE) — implemented in M2
 
-Read first: `docs/SPEC-PLATFORM.md` § OAuth (CONFIRM items + platform-side task), `docs/DECISIONS.md` D7, `docs/ARCHITECTURE.md` § Main process.
+Read first: `docs/SPEC-PLATFORM.md` § OAuth (all facts verified against live metadata 2026-09-17), `docs/DECISIONS.md` D13, `src/main/auth/` (the implementation).
 
-## Flow (all privileged parts in main)
+## Layout (main process only)
 
-1. Renderer invokes sign-in over `window.pw` → main generates `code_verifier` + S256 `code_challenge` + `state`.
-2. Main starts a **short-lived HTTP server on `http://127.0.0.1:<random-port>/callback`** (plain Node `http` module in main; bind 127.0.0.1 only; close immediately after the code arrives).
-3. Main opens the system browser: `shell.openExternal(authorizeUrl)` with `response_type=code`, `code_challenge`, `code_challenge_method=S256`, `state`, `scope=read write`, `redirect_uri`. Never an in-app window for the IdP.
-4. Callback handler validates `state`, extracts `code`, exchanges it token-endpoint (code + verifier). Refresh token if issued → all into **`safeStorage`** (OS keychain), main process only.
-5. Renderer learns "signed in" via typed IPC state push — it never sees the token.
+- `protocol.ts` — pure logic + constants: issuer `https://pageweave.dev`, `CALLBACK_PATH`/`CALLBACK_REGISTRATION_URI` (`http://127.0.0.1/callback`, portless — the platform's Doorkeeper ignores loopback ports per RFC 8252 §7.3), registration metadata, `classifyCallback` (state checked FIRST — forged redirects never reach the flow), token/expiry math, `authErrorMessage` (secret-free).
+- `store.ts` — `AuthStore`: encrypted-at-rest JSON (registration + tokens) via injectable `AuthEncryptor`; atomic 0600 writes; corrupt file → empty state, never a crash; unavailable keyring → save REFUSES (no plaintext fallback ever).
+- `loopback.ts` — `LoopbackServer`: one-shot `node:http` on `127.0.0.1:0`; GET-only; 404 non-callback, 400 + keep-waiting on state mismatch, 200 error page + reject on AS error redirect, 200 success page + resolve with callback URL; 5-min timeout; caller closes in `finally` (RFC 8252 §8.3).
+- `controller.ts` — `AuthController`: the only electron+openid-client consumer. `init()` (boot restore → silent refresh), `signIn()` (single-flight), `signOut()` (best-effort revoke, always wipe), `getAccessToken()` (M3 engine surface, refreshes on demand), `onState()` push with unsubscribe, `dispose()`.
 
-## Hard rules
+## Flow
 
-- **Tokens (access + refresh) and all provider keys live in main + safeStorage. Never in the renderer, never in logs, never in error objects sent to the renderer.** Anything returning auth state to the renderer returns booleans/expiry at most.
-- `state` must be validated on callback; ignore requests that don't match (log-and-drop, no user-facing error leak).
-- Refresh happens in main, transparently: on 401 from an MCP call or proactively near expiry. Sign-out = revoke if the platform supports it + wipe safeStorage entries + clear any cached state.
-- Loopback redirect with arbitrary port must be registered as `http://127.0.0.1/callback` per RFC 8252 §7.3 **if the platform accepts it — CONFIRM item**. Also CONFIRM: refresh-token issuance for public clients. **The desktop client registration itself (client_id) is a platform-side task that BLOCKS M2** — surface it early, do not silently stub (SPEC-PLATFORM § Platform-side tasks).
-- Scopes: coarse `read write`; no incremental-scope flows in v1.
+1. First sign-in: `dynamicClientRegistration(issuer, registrationMetadata())` — public client, `token_endpoint_auth_method: 'none'`, redirect_uris `[http://127.0.0.1/callback]`, grants `authorization_code`+`refresh_token`. **Once per install** — the platform throttles `/oauth/register` 5/h/IP; a 10-min retry guard backs this. Persist client_id (+ secret only if the AS issues one despite `none`; then `ClientSecretPost` — the per-install secret is legit confidential material, RFC 7591 §A.4.1).
+2. Later flows/boots: `discovery(issuer, clientId, metadata, clientAuthFor(reg))` — never re-register.
+3. Sign-in: ephemeral loopback port → `randomPKCECodeVerifier` + `calculatePKCECodeChallenge` (S256) + `randomState` → `buildAuthorizationUrl` (`scope: 'read write'`) → assert https → `shell.openExternal` → `authorizationCodeGrant(config, callbackUrl, { pkceCodeVerifier, expectedState })` → tokens to store.
+4. Refresh: `refreshTokenGrant` — scheduled at expiry−5 min (min 30 s) and on demand in `getAccessToken`; single-flight; keep old refresh token when the response omits one.
+5. Sign-out: `tokenRevocation(config, refreshToken ?? accessToken)` best-effort (offline-safe), then wipe store + memory, broadcast signed-out.
 
-## Testing
+## Hard rules (unchanged from M0, now enforced in code)
 
-- Pure-function unit tests: PKCE pair generation shape, state comparison, callback URL parsing (valid code, mismatched state, missing code, wrong port).
-- Token persistence mocked at the safeStorage boundary — no real keychain in tests.
-- M2 acceptance is the real loop: fresh install → sign in → browser → signed in; token survives restart; sign-out clears everything (Playwright E2E formalizes this at M4).
+- Tokens live ONLY in `AuthController`/`AuthStore` (main + safeStorage). Renderer gets `AuthState` = `{ status, error? }` — secret-free strings only. Engine gets the access token via main (M3).
+- Never embed a client secret in the binary; never log tokens; never put tokens in error objects.
+- System browser only — no BrowserWindow for the IdP (RFC 8252 §8.12). `127.0.0.1` literal, never `localhost` (§8.3).
+- `state` validated before anything else in a callback is accepted; mismatches get 400 and the flow keeps waiting.
+
+## Testing (tests/auth.test.ts)
+
+- PKCE cross-check: challenge === BASE64URL(SHA256(verifier)) — catches accidental `plain`.
+- `classifyCallback`: success / forged-state drop (before error handling) / AS error passthrough / wrong host+path.
+- `LoopbackServer` over real loopback HTTP: one-shot settle, 404/400/503 paths, escaped error pages, timeout, port freed on close.
+- `AuthStore` with fake encryptor + temp dir: round-trip, corrupt → empty + removed, unavailable-keyring refusal, no temp-file leftovers.
+- `registrationMetadata()` contract guard (public client, portless loopback URI).
 
 ## Red flags
 
-- Any OAuth step in the renderer or preload (fetching the token, holding it, refreshing).
-- `http://localhost:` instead of `127.0.0.1` (RFC 8252 requires literal IP for loopback).
-- Leaving the callback server running after sign-in completes.
-- Token in a query string of any internal navigation, or in `console.log` "for debugging".
-- Hardcoding a client_id from another app — the registered client is PageWeave Builder's own.
+- Any OAuth step in renderer/preload; tokens in `AuthState`; raw `ipcRenderer` in renderer.
+- Re-registering clients on boot or retry loops without the guard (throttle!).
+- Plaintext or unencrypted-at-rest persistence; `safeStorage` fallback to base64 "just for dev".
+- `localhost:` redirect URIs; loopback server left listening after the flow.
+- Importing `openid-client` outside `src/main/auth/` (isolation like the engine's `@earendil-works/*` rule).
 
 ## Sources
 
-- RFC 8252 (OAuth for Native Apps): https://datatracker.ietf.org/doc/html/rfc8252
-- docs/SPEC-PLATFORM.md § OAuth (platform's Doorkeeper-derived stack, canonical scope names)
+- RFC 8252 (OAuth for Native Apps) §7.3 loopback ports, §8.3 hygiene, §8.12 no embedded UA: https://datatracker.ietf.org/doc/html/rfc8252
+- RFC 7591 (DCR) + §A.4.1 per-install credentials: https://datatracker.ietf.org/doc/html/rfc7591
+- Doorkeeper URIChecker (platform stack): port-agnostic loopback matching https://github.com/doorkeeper-gem/doorkeeper/blob/main/lib/doorkeeper/oauth/helpers/uri_checker.rb
+- openid-client v6 docs: https://github.com/panva/openid-client
+- PageWeave OAuth docs: https://pageweave.dev/docs/oauth.md
 - Electron safeStorage: https://electronjs.org/docs/latest/api/safe-storage

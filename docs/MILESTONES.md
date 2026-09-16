@@ -20,16 +20,16 @@ Tasks:
 
 **Accept when:** `npm run dev` opens the app; typed ping-pong renderer→main→utility returns; lint/typecheck/tests green; app has zero renderer Node access (assert via CSP + config test).
 
-## M2 — Auth + websites
+## M2 — Auth ✅ (2026-09-17)
 
-**Depends on:** SPEC-PLATFORM § OAuth (client registration + endpoints CONFIRM items).
+**Depends on:** SPEC-PLATFORM § OAuth — resolved 2026-09-17 (dynamic client registration; no platform-side task, see D13).
 
 Tasks:
-1. OAuth module in main: system browser → loopback `127.0.0.1:<port>/callback`, PKCE pair, token exchange + refresh, safeStorage persistence.
-2. Signed-out/signed-in app states; sign out (revoke + clear storage).
-3. Website list: main asks engine (M3 stub for now: a temporary MCP-over-HTTPS client OR defer this display to M3 — do NOT build a parallel REST client; MCP is the data plane).
+1. OAuth module in main (`src/main/auth/`, DECISIONS D13): `openid-client@6.8.8` — RFC 8252 system-browser flow via `shell.openExternal`, ephemeral loopback `127.0.0.1:<port>/callback` (one portless registered URI; platform ignores loopback ports), PKCE S256 + state, RFC 7591 dynamic client registration **once per install** (persisted, throttle-aware), refresh (single-flight, proactive 5-min margin + on-demand), RFC 7009 revocation on sign-out, `safeStorage`-only persistence (atomic 0600 writes; refuses plaintext).
+2. Signed-out / signing-in / signed-in app states over typed IPC (`window.pw.auth`), state push with unsubscribe; tokens never leave main.
+3. Website list: **deferred to M3** (2026-09-17) — MCP is the only data plane; calling MCP from main would build a parallel client. Surfaces naturally once the engine wires the adapter.
 
-**Accept when:** fresh install → "Sign in" → browser → back in app signed in; token survives restart; website list renders; sign-out clears everything.
+**Accept when:** fresh install → "Sign in" → browser → back in app signed in; token survives restart (silent refresh at boot); sign-out clears everything. Automated coverage: 28 unit/contract tests (PKCE S256 cross-check, state-forgery drop, loopback server behaviors incl. one-shot/timeout/escaping, store round-trip + unavailable-keyring refusal, refresh-token fallback) + CI boot smoke. **The real browser round-trip is a manual acceptance on a user machine** (CI is headless; browser required).
 
 ## M3 — Engine (Pi + MCP + BYOK)
 

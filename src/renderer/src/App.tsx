@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppVersions, PongResponse } from '../../shared/ipc'
+import type { AppVersions, AuthState, PongResponse } from '../../shared/ipc'
 
 type Versions = AppVersions
 
@@ -12,6 +12,7 @@ export default function App() {
   const [result, setResult] = useState<PingResult | null>(null)
   const [pingError, setPingError] = useState<string | null>(null)
   const [versions, setVersions] = useState<Versions | null>(null)
+  const [auth, setAuth] = useState<AuthState>({ status: 'signed-out' })
 
   const ping = useCallback(async () => {
     try {
@@ -21,6 +22,23 @@ export default function App() {
     } catch (err) {
       setPingError(err instanceof Error ? err.message : String(err))
     }
+  }, [])
+
+  const signIn = useCallback(async () => {
+    setAuth(await window.pw.auth.signIn())
+  }, [])
+
+  const signOut = useCallback(async () => {
+    setAuth(await window.pw.auth.signOut())
+  }, [])
+
+  useEffect(() => {
+    void window.pw.auth
+      .getState()
+      .then(setAuth)
+      .catch(() => {})
+    const unsubscribe = window.pw.auth.onChanged(setAuth)
+    return unsubscribe
   }, [])
 
   useEffect(() => {
@@ -41,6 +59,31 @@ export default function App() {
       <header className="navbar border-b border-base-300 px-4">
         <span className="text-lg font-semibold">PageWeave Builder</span>
         <span className="badge badge-outline badge-sm ml-2">skeleton</span>
+
+        <div className="ml-auto flex items-center gap-2">
+          {auth.status === 'signed-out' && (
+            <>
+              {auth.error && <span className="max-w-72 text-error text-xs">{auth.error}</span>}
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => void signIn()}>
+                Sign in
+              </button>
+            </>
+          )}
+          {auth.status === 'signing-in' && (
+            <button type="button" className="btn btn-primary btn-sm" disabled>
+              <span className="loading loading-spinner loading-xs" />
+              Opening browser…
+            </button>
+          )}
+          {auth.status === 'signed-in' && (
+            <>
+              <span className="text-success text-sm">Signed in</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       <main className="grid flex-1 grid-cols-[240px_1fr_1fr] gap-px bg-base-300">

@@ -6,8 +6,8 @@ Everything this app needs from the PageWeave Rails platform (`~/dev/pageweave`, 
 
 | Item | Value |
 |---|---|
-| Base URL | `https://pageweave.dev/mcp` — **CONFIRM exact path** (grep the Rails routes for the MCP controller; the MCP server is served by the Rails app per platform AGENTS.md) |
-| Transport | Streamable HTTP (HTTP+SSE). **CONFIRM** the server's supported transports; if legacy-SSE-only, `pi-mcp-adapter` supports `sse` too |
+| Base URL | `https://pageweave.dev/mcp` — **verified 2026-09-17** (advertised as `resource` in the RFC 9728 protected-resource metadata; platform docs: `POST /mcp`, Streamable HTTP) |
+| Transport | Streamable HTTP (HTTP+SSE). Platform docs configure clients with `type: http`/`streamable-http`; if legacy-SSE-only were true, `pi-mcp-adapter` supports `sse` too (re-verify hands-on when M3 wires the adapter) |
 | Auth | `Authorization: Bearer <oauth access token>` |
 | Scopes | Coarse `read` + `write` (platform's bearer model; MCP tools derive per-tool checks from annotations) |
 | Tool surface | ~45 tools (`list_websites`, `get_website`, `create_website`, `get_page`/`list_pages`/`update_page`/`create_page`, snippets, components, assets, theme, forms, tables, environments, releases, feedback, …). Full list: the MCP server's tools/list, or `app/mcp_server/mcp/tools/*.rb` in the platform repo |
@@ -16,14 +16,22 @@ Everything this app needs from the PageWeave Rails platform (`~/dev/pageweave`, 
 
 ## OAuth
 
+Verified against the live discovery endpoints + https://pageweave.dev/docs/oauth.md on 2026-09-17. Implemented per DECISIONS D13 (`openid-client@6.8.8`, `src/main/auth/`). No CONFIRM items remain.
+
 | Item | Value |
 |---|---|
-| Provider | PageWeave's existing OAuth stack (Doorkeeper-derived, custom `Oauth::AuthorizationsController`/`TokensController`) |
-| Client type | **Public client, PKCE** — needs registration |
-| Redirect URI | `http://127.0.0.1:<random-port>/callback` (loopback; random port registered as `http://127.0.0.1/callback` per RFC 8252 if supported — **CONFIRM** the platform accepts loopback redirect URIs with any port) |
-| Scopes | `read write` (canonical names; platform unions/normalizes legacy aliases server-side) |
-| Token storage | Electron `safeStorage` (OS keychain); refresh via platform's refresh-token flow (**CONFIRM** refresh-token issuance for public clients) |
-| **Platform-side task** | Register the desktop OAuth client (client_id, name "PageWeave Builder", public/PKCE, redirect URI, scopes). Owner: platform repo. Blocks M2 |
+| Provider | PageWeave's OAuth 2.1 authorization server (Doorkeeper-derived) |
+| Issuer | `https://pageweave.dev` — RFC 8414 metadata at `/.well-known/oauth-authorization-server`; RFC 9728 protected-resource metadata (`/.well-known/oauth-protected-resource`) advertises it as the AS for `https://pageweave.dev/mcp` |
+| Client registration | **RFC 7591 dynamic** — `POST https://pageweave.dev/oauth/register`, open (no initial access token), **throttled 5/h/IP** (platform Rack::Attack). Registration is once per install, persisted (encrypted) in safeStorage |
+| Client type | Public — `token_endpoint_auth_method: "none"`, PKCE S256 only (`code_challenge_methods_supported: ["S256"]`) |
+| Redirect URI | Registered portless `http://127.0.0.1/callback`; request-time port is ephemeral. Platform's Doorkeeper ignores loopback ports per RFC 8252 §7.3 (path compared exactly) |
+| Grant types | `authorization_code` + `refresh_token` (both advertised) |
+| Scopes | `read write` — always both, canonical names in token responses, `invalid_scope` on unknown |
+| Token lifetime | Access tokens expire after 1h; refresh proactively (~5 min margin), single-flight, + on-demand (`getAccessToken`) |
+| Revocation | `revocation_endpoint: https://pageweave.dev/oauth/revoke` (RFC 7009) — best-effort on sign-out, local wipe always happens |
+| Storage | Electron `safeStorage` via `AuthStore` (atomic 0600 writes, userData); no plaintext fallback — persist refuses when the OS keyring is unavailable |
+| MCP authorization | `Authorization: Bearer <access token>` on `https://pageweave.dev/mcp` |
+| API-key fallback | `pagew_...` keys exist for CI/server use — not used by the app |
 
 ## Websites data plane
 
@@ -61,7 +69,7 @@ Skill set to ship in-app (SKILL.md files under engine resources): site-building 
 
 ## Platform-side tasks (tracked here; executed in the Rails repo with user approval)
 
-1. **Register desktop OAuth public client** (blocks M2) — client_id to be recorded here after registration
-2. Confirm/expose MCP endpoint path + transports (blocks M3 config)
-3. Optional: product-identification header for MCP requests (M3+, nice-to-have)
-4. M5: decide auto-update feed host (pageweave.dev static route vs GitHub releases)
+1. Optional: product-identification header for MCP requests (M3+, nice-to-have)
+2. M5: decide auto-update feed host (pageweave.dev static route vs GitHub releases)
+
+(The former "register desktop OAuth client" task was removed 2026-09-17: the platform's RFC 7591 dynamic registration makes it unnecessary — see DECISIONS D13. The former "confirm MCP endpoint/transports" task was resolved by the RFC 9728 metadata + client config docs.)

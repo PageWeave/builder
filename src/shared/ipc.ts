@@ -14,6 +14,14 @@ export const IpcChannel = {
   enginePing: 'engine:ping',
   /** Static app/runtime versions. */
   appVersions: 'app:versions',
+  /** Start the OAuth sign-in flow (system browser + loopback callback). */
+  authSignIn: 'auth:signIn',
+  /** Revoke tokens (best effort) and wipe stored credentials. */
+  authSignOut: 'auth:signOut',
+  /** Read the current auth state (never contains tokens). */
+  authGetState: 'auth:getState',
+  /** Main → renderer push whenever the auth state changes. */
+  authStateChanged: 'auth:changed',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]
@@ -39,6 +47,15 @@ export interface AppVersions {
   node: string
 }
 
+/** Auth lifecycle state. Tokens never cross into the renderer — status only. */
+export type AuthStatus = 'signed-out' | 'signing-in' | 'signed-in'
+
+export interface AuthState {
+  status: AuthStatus
+  /** Present when the last sign-in attempt failed; human-readable, no secrets. */
+  error?: string
+}
+
 /**
  * The full bridge surface exposed as `window.pw` by the preload script.
  * Renderer code may only ever call methods on this interface.
@@ -49,6 +66,13 @@ export interface PwBridge {
   }
   app: {
     versions(): Promise<AppVersions>
+  }
+  auth: {
+    signIn(): Promise<AuthState>
+    signOut(): Promise<AuthState>
+    getState(): Promise<AuthState>
+    /** Subscribes to auth state pushes. Returns an unsubscribe function. */
+    onChanged(listener: (state: AuthState) => void): () => void
   }
 }
 
