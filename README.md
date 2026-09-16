@@ -2,7 +2,7 @@
 
 Desktop app for building websites on [PageWeave](https://pageweave.dev) with a local AI agent — designed for **non-technical users**: download, sign in, pick a site, chat. No MCP, skills, prompts, or API keys concepts ever surface in the UX (model setup happens once, in a guided flow).
 
-**Status: M1 complete — Electron skeleton + CI green.** The app shell boots with sandboxed renderer, typed IPC bridge, and a working engine utility process (ping/pong harness for M3). Chat/site-picker/preview are placeholders until M4. See [PLAN.md](PLAN.md) for status.
+**Status: M2 complete — auth works end-to-end (OAuth 2.1 + PKCE, dynamic client registration, safeStorage).** App shell + signed-in/out states are real; chat/site-picker/preview arrive with M3 (engine) and M4 (product UI). See [PLAN.md](PLAN.md) for status.
 
 ## Quick start (development)
 

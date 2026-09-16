@@ -12,7 +12,7 @@ Rules for AI agents working in this repository.
 
 ## Repo state
 
-M1 done (2026-09-16): Electron skeleton + CI live at `github.com/PageWeave/builder` (private). `npm run dev|build|lint|typecheck|test` all exist and are green. Stack exact-pinned per DECISIONS D12: electron 44, electron-vite 5 + vite 7 (NOT 8), TypeScript 5.9 (NOT 7), React 19, Tailwind 4 + daisyUI 5, vitest 5, eslint 10. `src/engine/` is a ping/pong stub — pi packages (`@earendil-works/*`, `pi-mcp-adapter`) are NOT installed until M3. Agent skills live in `.opencode/skills/` (read the relevant one before touching its area). CI runs verify + xvfb boot smoke + gitleaks on every push; Dependabot is configured with wave-locked major ignores.
+M2 done (2026-09-17): OAuth auth complete on top of the M1 skeleton — `openid-client` 6.8.8 (exact pin, D13) in `src/main/auth/` only: RFC 7591 dynamic client registration once per install (platform throttles /oauth/register), RFC 8252 loopback flow (one portless registered URI; platform ignores loopback ports), PKCE S256, single-flight refresh, RFC 7009 revocation, safeStorage-only persistence. Renderer sees `AuthState` only. Website list deferred to M3 (MCP is the only data plane). CI green (verify + xvfb smoke + gitleaks); M1 stack pins per D12 unchanged; pi packages (`@earendil-works/*`, `pi-mcp-adapter`) still NOT installed until M3. All platform OAuth/MCP facts verified against live metadata (SPEC-PLATFORM, no CONFIRM items left except preview auth R6 + app-identity). Agent skills in `.opencode/skills/` — read the relevant one before touching its area.
 
 ## What this project is
 

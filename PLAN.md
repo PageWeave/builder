@@ -1,6 +1,6 @@
 # PLAN.md — PageWeave Builder Master Plan
 
-Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-16 (M1).
+Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-17 (M2).
 
 ## Vision
 
@@ -50,7 +50,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 |---|---|
 | M0 — repo + planning docs | ✅ done |
 | M1 — Electron skeleton + CI | ✅ done (2026-09-16) |
-| M2 — Auth (OAuth, token storage, website list) | ⬜ next |
+| M2 — Auth (OAuth, token storage) | ✅ done (2026-09-17) — real-browser sign-in round-trip pending user acceptance run |
+| M3 — Engine (Pi + MCP + BYOK) | ⬜ next |
 | M3 — Engine (Pi + MCP adapter, BYOK UI, debug console) | ⬜ |
 | M4 — Product UI (chat, site picker, preview) | ⬜ |
 | M5 — Ship (signing, notarization, auto-update, installers) | ⬜ |
@@ -58,12 +59,14 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Full breakdown with acceptance criteria: [docs/MILESTONES.md](docs/MILESTONES.md).
 
-## Next actions (for the agent starting M2)
+## Next actions (for the agent starting M3)
 
-1. Read `docs/DECISIONS.md` (D12 = toolchain pins), `docs/ARCHITECTURE.md`, `docs/SPEC-PLATFORM.md` § OAuth.
-2. **Unblock M2 first:** the desktop OAuth client registration is a platform-side task (SPEC-PLATFORM § Platform-side tasks #1) and blocks M2 — surface to the user; also resolve the loopback-redirect and refresh-token CONFIRM items against the Rails app.
-3. Implement M2 per `docs/MILESTONES.md` (OAuth module in main, safeStorage, signed-in/out states). Start from the `oauth-pkce` skill in `.opencode/skills/`.
-4. M3 note: `externalizeDepsPlugin` vs bundling pi into the engine chunk is a decision recorded as deferred in D12 — measure at M3.
+1. Read `docs/DECISIONS.md` (D12 pins, D13 auth), `docs/ARCHITECTURE.md`, then the `pi-engine` + `electron-ipc` skills.
+2. Add engine deps exact-pinned (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `pi-mcp-adapter` — re-verify current versions + API shapes against https://pi.dev/docs/latest/sdk first; see `docs/RESEARCH.md` § 1). Decide `externalizeDepsPlugin` vs bundling pi into the engine chunk by measurement; record in DECISIONS.
+3. Wire MCP: `createMcpAdapter` with `https://pageweave.dev/mcp` + Bearer from `AuthController.getAccessToken()`; token push to engine on refresh (R9). Measure `directTools: true` vs `"search"` context cost with the real ~45-tool server; record in DECISIONS.
+4. Website list (deferred from M2) surfaces via the engine's `list_websites`.
+5. BYOK: model-connect UI → safeStorage → engine; event bridge → `src/shared/engine-events.ts` typed envelopes; debug chat console for the M3 acceptance loop.
+6. Deferred user acceptance: real-browser sign-in round-trip of M2 (`npm run dev` on a display machine).
 
 ## Non-goals (v1)
 
