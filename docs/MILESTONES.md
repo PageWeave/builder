@@ -6,9 +6,9 @@ Each milestone: goal, tasks, acceptance criteria. Do not start a milestone whose
 
 Done: `~/dev/pageweave-builder` created, git initialized, full handoff docs written.
 
-## M1 — Electron skeleton + CI
+## M1 — Electron skeleton + CI ✅ (2026-09-16)
 
-**Goal:** Running app shell with clean process separation and dev loop.
+**Goal:** Running app shell with clean process separation and dev loop. Done: pinned stack per DECISIONS D12 (electron 44, electron-vite 5 + vite 7, TS 5.9, React 19, Tailwind 4 + daisyUI 5), sandboxed CJS preload in ESM project, engine utility process with MessageChannelMain ping-pong + crash backoff, typed `window.pw` bridge, security posture + config tests, CI (verify + xvfb boot smoke + gitleaks) green on `PageWeave/builder`. CI proves the full boot path headlessly (local machines without a display can't).
 
 Tasks:
 1. Scaffold: `electron-vite` + React + TypeScript strict + Tailwind 4. Structure `src/{main,renderer,preload,engine,shared}`.

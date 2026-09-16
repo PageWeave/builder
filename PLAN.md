@@ -1,6 +1,6 @@
 # PLAN.md — PageWeave Builder Master Plan
 
-Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-16 (M0).
+Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-16 (M1).
 
 ## Vision
 
@@ -49,8 +49,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Milestone | State |
 |---|---|
 | M0 — repo + planning docs | ✅ done |
-| M1 — Electron skeleton + CI | ⬜ next |
-| M2 — Auth (OAuth, token storage, website list) | ⬜ |
+| M1 — Electron skeleton + CI | ✅ done (2026-09-16) |
+| M2 — Auth (OAuth, token storage, website list) | ⬜ next |
 | M3 — Engine (Pi + MCP adapter, BYOK UI, debug console) | ⬜ |
 | M4 — Product UI (chat, site picker, preview) | ⬜ |
 | M5 — Ship (signing, notarization, auto-update, installers) | ⬜ |
@@ -58,11 +58,12 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Full breakdown with acceptance criteria: [docs/MILESTONES.md](docs/MILESTONES.md).
 
-## Next actions (for the agent starting M1)
+## Next actions (for the agent starting M2)
 
-1. Read `docs/DECISIONS.md`, `docs/ARCHITECTURE.md`, `docs/SPEC-PLATFORM.md` (note the CONFIRM items — some block M2, none block M1)
-2. Scaffold per M1 in [docs/MILESTONES.md](docs/MILESTONES.md)
-3. Platform dependencies for M2+ are listed in `docs/SPEC-PLATFORM.md` § "Platform-side tasks" — surface them to the user early; do not silently block
+1. Read `docs/DECISIONS.md` (D12 = toolchain pins), `docs/ARCHITECTURE.md`, `docs/SPEC-PLATFORM.md` § OAuth.
+2. **Unblock M2 first:** the desktop OAuth client registration is a platform-side task (SPEC-PLATFORM § Platform-side tasks #1) and blocks M2 — surface to the user; also resolve the loopback-redirect and refresh-token CONFIRM items against the Rails app.
+3. Implement M2 per `docs/MILESTONES.md` (OAuth module in main, safeStorage, signed-in/out states). Start from the `oauth-pkce` skill in `.opencode/skills/`.
+4. M3 note: `externalizeDepsPlugin` vs bundling pi into the engine chunk is a decision recorded as deferred in D12 — measure at M3.
 
 ## Non-goals (v1)
 

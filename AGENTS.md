@@ -12,7 +12,7 @@ Rules for AI agents working in this repository.
 
 ## Repo state
 
-Docs-only (M0 done): no `package.json`, no `src/`, no CI yet. `npm run lint` / `typecheck` / `test` exist only after M1 scaffolds them (see `docs/MILESTONES.md`) — don't hunt for code that isn't there; implement per the milestone docs.
+M1 done (2026-09-16): Electron skeleton + CI live at `github.com/PageWeave/builder` (private). `npm run dev|build|lint|typecheck|test` all exist and are green. Stack exact-pinned per DECISIONS D12: electron 44, electron-vite 5 + vite 7 (NOT 8), TypeScript 5.9 (NOT 7), React 19, Tailwind 4 + daisyUI 5, vitest 5, eslint 10. `src/engine/` is a ping/pong stub — pi packages (`@earendil-works/*`, `pi-mcp-adapter`) are NOT installed until M3. Agent skills live in `.opencode/skills/` (read the relevant one before touching its area). CI runs verify + xvfb boot smoke + gitleaks on every push; Dependabot is configured with wave-locked major ignores.
 
 ## What this project is
 

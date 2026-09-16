@@ -2,7 +2,23 @@
 
 Desktop app for building websites on [PageWeave](https://pageweave.dev) with a local AI agent — designed for **non-technical users**: download, sign in, pick a site, chat. No MCP, skills, prompts, or API keys concepts ever surface in the UX (model setup happens once, in a guided flow).
 
-**Status: pre-development (M0 complete — planning docs only).** No code yet.
+**Status: M1 complete — Electron skeleton + CI green.** The app shell boots with sandboxed renderer, typed IPC bridge, and a working engine utility process (ping/pong harness for M3). Chat/site-picker/preview are placeholders until M4. See [PLAN.md](PLAN.md) for status.
+
+## Quick start (development)
+
+Requirements: Node >= 22.12 (see `.nvmrc`), npm.
+
+```bash
+npm install                              # install-script allowlist (esbuild, electron) is pre-approved in package.json
+npm run dev                              # electron-vite dev server + app window
+npm run lint && npm run typecheck && npm run test && npm run build
+```
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs on every push: **verify** (lint, typecheck, unit tests, build), **smoke** (launches the built app under xvfb and asserts the renderer→main→engine ping-pong self-check), and **gitleaks** (secret scan, pinned CLI — no action license needed for orgs).
+
+## License
+
+[AGPL-3.0-only](LICENSE) — open source; the hosted PageWeave platform remains the commercial surface.
 
 ## Start here
 
