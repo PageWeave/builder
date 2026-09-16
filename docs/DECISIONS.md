@@ -67,3 +67,17 @@ Each decision: context → choice → rationale → consequences. Locked unless 
 ## D11 — Platforms: macOS + Windows first.
 
 **Choice (user, 2026-09-16).** Linux builds later (Electron makes it cheap to add; signing/testing effort goes to the two mainstream platforms first). Apple silicon + Intel macs, x64 Windows.
+
+## D12 — M1 toolchain: exact pins, hand-rolled scaffold, CJS preload, daisyUI, testing pyramid, AGPL.
+
+**Context (2026-09-16, M1):** Scaffold decisions: generator vs hand-rolled, Vite/TypeScript majors, preload module format, UI kit, test layers, license. All versions verified against live npm peer ranges on 2026-09-16.
+
+**Choices:**
+- **Pins:** electron 44.4.x · electron-vite 5.0.0 · **vite 7.3.x (NOT 8** — electron-vite 5's peer range stops at ^7; electron-vite 6 is beta; upgrade as one deliberate wave when stable) · @vitejs/plugin-react 5.2 (v6 needs Vite 8) · **typescript 5.9 (NOT 7** — typescript-eslint 8.70 peers typescript <6.1) · react 19.3 · tailwindcss 4.3 + @tailwindcss/vite · **daisyui 5.7** (user choice: same design vocabulary as the PageWeave platform; semantic tokens only) · vitest 5 · eslint 10 flat + typescript-eslint 8.70. Package manager: npm.
+- **Hand-rolled scaffold** over `npm create @quick-start/electron` (researched): the official template ships `sandbox: false` + ESM preload (violates our security posture), `^` ranges, no engine/shared layout, no tests/lint/CI — most of it would be rewritten. What we absorbed from the template: the `externalizeDepsPlugin()` question — deferred to M3, where we decide bundle-pi-into-engine-chunk vs externalize (measure, record here).
+- **`"type": "module"` project + CJS preload:** sandboxed preload scripts cannot be ESM (ESM preload forces `sandbox: false`). electron-vite config forces the preload target to `format: 'cjs'` with `.cjs` filenames; main + engine ship as ESM (keeps pi's ESM-only packages clean at M3).
+- **Testing pyramid:** Vitest node env from M1 (pure functions; `vi.mock("electron")` as fallback; never test IPC plumbing). **Vitest Browser Mode** (`vitest-browser-react`, real Chromium) is the M4 default for component tests — jsdom is deliberately NOT adopted. Playwright `_electron` E2E from M4. CI boot smoke under xvfb (`PW_SMOKE=1`, `--no-sandbox` is CI-only).
+- **License: AGPL-3.0-only** (user choice — open source). Repo private for now; LICENSE present from day one; `license` field set in package.json.
+- npm 11 install-script allowlist: `esbuild` + `electron` approved (unpinned) via package.json `allowScripts` — CI `npm ci` honors it.
+
+**Consequences:** Upgrade waves are deliberate: electron-vite 6 + Vite 8 + plugin-react 6 land together once stable; TS 7 waits for typescript-eslint support. Engine deps (`@earendil-works/*`, `pi-mcp-adapter`) get their own pinned entries at M3. `.opencode/skills/` encodes these rules for agents (electron-vite, testing skills).
