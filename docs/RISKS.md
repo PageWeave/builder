@@ -1,0 +1,17 @@
+# RISKS.md — Risks and mitigations
+
+| # | Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|---|
+| R1 | `pi-mcp-adapter` is third-party; API drift or abandonment breaks our MCP path | Med | High | It's MIT and small — vendor into `vendor/` if it drifts (AGENTS.md escape hatch). Pin exact versions. Adapter surface we use is narrow (`createMcpAdapter` + one server config). |
+| R2 | Pi package scope churn (`@mariozechner/*` → `@earendil-works/*` already happened once); SDK API changes | Med | Med | Pin versions + lockfile; isolate ALL pi imports behind `src/engine/` (one module); upgrades are deliberate tested changes; 220+ contributors and company-ish backing (earendil-works) reduce abandonment risk. |
+| R3 | Pi lacks permission engine / subagents | Certain (design) | Low | D10: server-side workflow confirmations + read-only local tools. Nested `createAgentSession` possible if subagents ever needed. |
+| R4 | Electron major-release treadmill (~8 weeks; only latest 3 supported) | Certain | Med | Scheduled ~3 upgrades/yr, 2–4 dev-days each; subscribe to Electron release notes; security fixes prioritize. |
+| R5 | Signing/notarization pipeline complexity (Apple notary, Windows cert) | Med | Med (ship blocker) | Start M5 with ample lead time; certs are user-side purchases — flag early. Test in CI with secrets, never committed. |
+| R6 | Preview auth on password-protected dev envs (WebContentsView can't send Bearer; cookie login flow untested) | Med | Low v1 | Spike in M4: options = `webRequest.onBeforeSendHeaders` header injection, cookie bootstrapping via main-process fetch, or v1 shows "protected — open in browser" fallback. |
+| R7 | BYOK friction for non-technical users (key acquisition is genuinely hard for this audience) | High | High (adoption) | Guided connect flow + OpenRouter as curated default + great copy. Real fix = M6 gateway (D5 history). Track drop-off at the connect step once shipped. |
+| R8 | MCP endpoint/auth details unconfirmed against current Rails app (endpoint path, PKCE support, desktop client registration) | Med | Blocks M2/M3 | SPEC-PLATFORM § CONFIRM list; resolve with platform repo before M2. None of it blocks M1. |
+| R9 | OAuth token lifetime vs long app sessions; refresh races | Med | Med | Refresh in main process with single-flight lock; re-auth prompt on final failure; engine receives token per-spawn and via update message on refresh. |
+| R10 | Context cost of ~45 MCP tools with big descriptions hurting small BYOK models | Med | Med | `directTools: "search"` mode exists precisely for this; decide by measurement (M3 task); PageWeave already keeps tool descriptions lean (platform token-efficiency rules). |
+| R11 | App name "PageWeave Builder" is descriptive → weak trademark, future confusion risk | Low | Low | Recorded tradeoff (D8). No action v1. |
+| R12 | Renderer compromise via preview content (WebViews loading user sites) | Low | High | Separate session partition, no Node in views, navigation fenced to PageWeave hosts, CSP; user sites are Liquid-rendered platform content (already sanitized server-side), not arbitrary web. |
+| R13 | Model output quality regressions from provider-side changes (BYOK = user's model choice varies) | Med | Med | System prompt + skills versioned in repo; recommend known-good models in connect flow; engine-level retries (pi) handle transient issues. |
