@@ -30,6 +30,10 @@ export default defineConfig({
       externalizeDeps: false,
       rollupOptions: {
         input: { index: 'src/main/index.ts' },
+        // photon-node reads its .wasm via bare __dirname at module scope —
+        // impossible inside a bundled ESM chunk. It stays a plain CJS require
+        // from node_modules (real __dirname) while everything else bundles.
+        external: [/^@silvia-odwyer\//],
         output: {
           // Single file per entry: code-split chunk ordering broke the
           // __filename shim with a TDZ error at engine boot.
