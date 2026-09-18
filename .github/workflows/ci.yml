@@ -119,7 +119,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Package (dir)
-        run: npx electron-builder --dir --linux
+        run: npm run dist:dir
       - name: Install runtime libs
         run: |
           sudo apt-get update -y
