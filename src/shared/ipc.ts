@@ -30,8 +30,12 @@ export const IpcChannel = {
   engineSteer: 'engine:steer',
   /** Abort the in-flight agent run. */
   engineAbort: 'engine:abort',
-  /** Open (or create) the agent session for a website scope. */
+  /** Open (or create/switch) the agent session for a website scope. */
   engineOpenSession: 'engine:openSession',
+  /** List stored conversations (pi sessions) for a website scope. */
+  sessionList: 'session:list',
+  /** List the user's PageWeave websites (engine-side direct MCP call). */
+  sitesList: 'sites:list',
   /** Main → renderer push for engine streaming events. */
   engineEvent: 'engine:event',
   /** Start the OAuth sign-in flow (system browser + loopback callback). */
@@ -128,8 +132,14 @@ export interface PwBridge {
     steer(req: SteerRequest): Promise<SteerResponse>
     abort(): Promise<AbortResponse>
     openSession(req: OpenSessionRequest): Promise<OpenSessionResponse>
+    /** Lists stored conversations (pi sessions) for a website scope. */
+    listSessions(req: ListSessionsRequest): Promise<ListSessionsResponse>
     /** Subscribes to engine streaming events. Returns an unsubscribe function. */
     onEvent(listener: (event: import('./engine-events').EngineEvent) => void): () => void
+  }
+  sites: {
+    /** Lists the user's PageWeave websites (direct MCP call in the engine). */
+    list(): Promise<ListWebsitesResponse>
   }
   models: {
     save(req: ModelSaveRequest): Promise<ModelConfigView>
@@ -176,14 +186,53 @@ export interface AbortResponse {
 }
 
 /**
- * Session scope: one Pi session per website. M3's debug console uses the
- * fixed `debug` scope.
+ * Session scope: one Pi session tree per website. The default re-opens the
+ * most recent conversation; `fresh` starts a new one; `sessionPath` switches
+ * to a specific stored conversation (validated engine-side against the
+ * website's work directory).
  */
 export interface OpenSessionRequest {
   websiteId: string
+  /** Absolute path of a stored conversation (from list-sessions). */
+  sessionPath?: string
+  /** Start a brand-new conversation instead of resuming the most recent. */
+  fresh?: boolean
 }
 export interface OpenSessionResponse {
   sessionId: string
+}
+
+/** One stored conversation (pi session file) as shown in the switcher UI. */
+export interface ConversationSummary {
+  /** Absolute path of the session file — opaque handle for open-session. */
+  path: string
+  id: string
+  /** User-defined name, when set. */
+  name?: string
+  /** Truncated first user message — auto-title fallback. */
+  firstMessage: string
+  /** ISO timestamp of the last write. */
+  modified: string
+  messageCount: number
+}
+export interface ListSessionsRequest {
+  websiteId: string
+}
+export interface ListSessionsResponse {
+  conversations: ConversationSummary[]
+}
+
+/** One user website for the site picker. */
+export interface WebsiteSummary {
+  id: string
+  name: string
+  /** Dev environment URL (preview target — noindex, tracks latest). */
+  devUrl?: string
+  /** Live/default environment URL. */
+  liveUrl?: string
+}
+export interface ListWebsitesResponse {
+  websites: WebsiteSummary[]
 }
 
 /** Main → engine, applied to the in-memory runtime (secrets allowed here). */
@@ -222,6 +271,8 @@ export type EngineRequest =
   | { kind: 'steer'; requestId: string; payload: SteerRequest }
   | { kind: 'abort'; requestId: string; payload: null }
   | { kind: 'list-models'; requestId: string; payload: { provider: ModelProvider } }
+  | { kind: 'list-sessions'; requestId: string; payload: ListSessionsRequest }
+  | { kind: 'list-websites'; requestId: string; payload: null }
 
 export type EngineResponse =
   | { kind: 'pong'; requestId: string; payload: PongResponse }
@@ -232,6 +283,8 @@ export type EngineResponse =
   | { kind: 'steer'; requestId: string; payload: SteerResponse }
   | { kind: 'abort'; requestId: string; payload: AbortResponse }
   | { kind: 'models'; requestId: string; payload: ModelListResponse }
+  | { kind: 'sessions'; requestId: string; payload: ListSessionsResponse }
+  | { kind: 'websites'; requestId: string; payload: ListWebsitesResponse }
   | { kind: 'error'; requestId: string; message: string }
 
 /** Every valid engine request kind, and its paired response kind. */
@@ -244,6 +297,8 @@ export const ENGINE_REQUEST_KINDS = [
   'steer',
   'abort',
   'list-models',
+  'list-sessions',
+  'list-websites',
 ] as const
 export type EngineRequestKind = (typeof ENGINE_REQUEST_KINDS)[number]
 export const ENGINE_RESPONSE_KINDS = [
@@ -255,6 +310,8 @@ export const ENGINE_RESPONSE_KINDS = [
   'steer',
   'abort',
   'models',
+  'sessions',
+  'websites',
   'error',
 ] as const
 export type EngineResponseKind = (typeof ENGINE_RESPONSE_KINDS)[number]

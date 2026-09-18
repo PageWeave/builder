@@ -19,6 +19,12 @@ export type EngineEvent =
   | { type: 'tool_end'; callId: string; name: string; isError: boolean; outputPreview?: string }
   | { type: 'status'; message: string }
   | { type: 'error'; message: string }
+  | {
+      type: 'history'
+      sessionId: string
+      websiteId: string
+      messages: HistoryMessage[]
+    }
 
 export const ENGINE_EVENT_TYPES = [
   'session',
@@ -32,8 +38,33 @@ export const ENGINE_EVENT_TYPES = [
   'tool_end',
   'status',
   'error',
+  'history',
 ] as const
 export type EngineEventType = (typeof ENGINE_EVENT_TYPES)[number]
+
+/** A tool call (plus its folded-in result) inside a history message. */
+export interface HistoryToolCall {
+  id: string
+  name: string
+  isError: boolean
+  outputPreview?: string
+}
+
+/**
+ * One renderer-safe transcript message rebuilt from a stored pi session when
+ * a conversation is (re)opened. Text is truncated defensively; tool results
+ * are folded into the assistant tool call that produced them.
+ */
+export interface HistoryMessage {
+  role: 'user' | 'assistant'
+  text: string
+  thinking?: string
+  toolCalls?: HistoryToolCall[]
+}
+
+/** History caps — conversations can be long; the rebuild stays bounded. */
+export const HISTORY_MAX_MESSAGES = 500
+export const HISTORY_TEXT_MAX_CHARS = 20_000
 
 /** Messages the engine pushes to main over the MessagePort (no requestId). */
 export type EngineNotice =

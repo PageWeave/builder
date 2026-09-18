@@ -126,6 +126,18 @@ async function handleRequest(port: PortLike, req: EngineRequest, paths: EnginePa
       respond(port, { kind: 'models', requestId: req.requestId, payload: result })
       return
     }
+    case 'list-sessions': {
+      const runner = ensureRunner(paths)
+      const result = await runner.listSessions(req.payload)
+      respond(port, { kind: 'sessions', requestId: req.requestId, payload: result })
+      return
+    }
+    case 'list-websites': {
+      const runner = ensureRunner(paths)
+      const result = await runner.listWebsites()
+      respond(port, { kind: 'websites', requestId: req.requestId, payload: result })
+      return
+    }
     default: {
       respond(port, {
         kind: 'error',

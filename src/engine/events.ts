@@ -1,7 +1,11 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent'
 import {
+  HISTORY_MAX_MESSAGES,
+  HISTORY_TEXT_MAX_CHARS,
   TOOL_OUTPUT_PREVIEW_MAX_CHARS,
   type EngineEvent,
+  type HistoryMessage,
+  type HistoryToolCall,
 } from '../shared/engine-events'
 
 /**
@@ -98,4 +102,117 @@ export function mapSessionEvents(raw: AgentSessionEvent): EngineEvent[] {
   const mapped = mapSessionEvent(raw)
   if (mapped === null) return []
   return Array.isArray(mapped) ? mapped : [mapped]
+}
+
+/* ------------------------------------------------------------------------- */
+/* History backfill — rebuilt transcript when a stored conversation opens.    */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Structural view of pi's AgentMessage (role + content). Kept loose on
+ * purpose: stored sessions may come from older pi versions, and unknown
+ * shapes degrade to text previews instead of breaking the rebuild.
+ */
+export type HistorySourceMessage = Record<string, unknown>
+
+/** Content part type tags seen in pi messages. */
+const PART_TYPES = { text: 'text', thinking: 'thinking', toolCall: 'toolCall' } as const
+
+export function mapHistoryMessages(
+  sessionId: string,
+  websiteId: string,
+  raw: unknown,
+): Extract<EngineEvent, { type: 'history' }> {
+  return { type: 'history', sessionId, websiteId, messages: buildHistoryMessages(raw) }
+}
+
+/** Pure: AgentMessage[] → renderer-safe HistoryMessage[] (bounded, truncated). */
+export function buildHistoryMessages(raw: unknown): HistoryMessage[] {
+  if (!Array.isArray(raw)) return []
+  const source = raw.slice(-HISTORY_MAX_MESSAGES) as HistorySourceMessage[]
+  const out: HistoryMessage[] = []
+  for (const message of source) {
+    const role = stringAt(message, 'role')
+    if (role === 'user') {
+      out.push({ role: 'user', text: truncateText(joinUserText(message)) })
+      continue
+    }
+    if (role === 'toolResult') {
+      foldToolResult(out, message)
+      continue
+    }
+    if (role === 'assistant') {
+      out.push(buildAssistant(message))
+      continue
+    }
+    // Unknown roles (custom entries, compaction markers…) are dropped.
+  }
+  return out
+}
+
+function buildAssistant(message: HistorySourceMessage): HistoryMessage {
+  const content = Array.isArray(message.content) ? message.content : []
+  let text = ''
+  let thinking = ''
+  const toolCalls: HistoryToolCall[] = []
+  for (const part of content) {
+    const record = asRecord(part)
+    switch (record.type) {
+      case PART_TYPES.text: {
+        const value = stringAt(record, 'text')
+        if (value) text += (text ? '\n\n' : '') + value
+        break
+      }
+      case PART_TYPES.thinking: {
+        const value = stringAt(record, 'thinking')
+        if (value) thinking += (thinking ? '\n\n' : '') + value
+        break
+      }
+      case PART_TYPES.toolCall: {
+        const id = stringAt(record, 'id') ?? `call-${toolCalls.length}`
+        toolCalls.push({ id, name: stringAt(record, 'name') ?? 'unknown-tool', isError: false })
+        break
+      }
+      default:
+        break
+    }
+  }
+  const messageOut: HistoryMessage = { role: 'assistant', text: truncateText(text) }
+  if (thinking) messageOut.thinking = truncateText(thinking)
+  if (toolCalls.length > 0) messageOut.toolCalls = toolCalls
+  return messageOut
+}
+
+/** Folds a toolResult message into the matching tool call on the nearest assistant message. */
+function foldToolResult(out: HistoryMessage[], message: HistorySourceMessage): void {
+  const callId = stringAt(message, 'toolCallId')
+  const target = [...out].reverse().find((m) => m.toolCalls?.some((call) => call.id === callId))
+  const call = target?.toolCalls?.find((c) => c.id === callId)
+  if (!call) return
+  call.isError = message.isError === true
+  const content = Array.isArray(message.content) ? message.content : []
+  const parts = content
+    .map((part) => stringAt(asRecord(part), 'text') ?? '[non-text content]')
+    .filter((part) => part.length > 0)
+  const output = parts.join('\n')
+  if (output.length > 0) call.outputPreview = truncatePreview(output)
+}
+
+function joinUserText(message: HistorySourceMessage): string {
+  const content = message.content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((part) => {
+      const record = asRecord(part)
+      if (stringAt(record, 'type') === PART_TYPES.text) return stringAt(record, 'text') ?? ''
+      return '[image]'
+    })
+    .filter((part) => part.length > 0)
+    .join('\n\n')
+}
+
+function truncateText(text: string): string {
+  if (text.length <= HISTORY_TEXT_MAX_CHARS) return text
+  return `${text.slice(0, HISTORY_TEXT_MAX_CHARS)}… [truncated ${text.length - HISTORY_TEXT_MAX_CHARS} chars]`
 }

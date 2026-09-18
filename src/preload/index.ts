@@ -5,6 +5,9 @@ import {
   type AbortResponse,
   type AppVersions,
   type AuthState,
+  type ListSessionsRequest,
+  type ListSessionsResponse,
+  type ListWebsitesResponse,
   type ModelConfigView,
   type ModelListResponse,
   type ModelSaveRequest,
@@ -33,6 +36,8 @@ const bridge: PwBridge = {
     abort: (): Promise<AbortResponse> => ipcRenderer.invoke(IpcChannel.engineAbort),
     openSession: (req: OpenSessionRequest): Promise<OpenSessionResponse> =>
       ipcRenderer.invoke(IpcChannel.engineOpenSession, req),
+    listSessions: (req: ListSessionsRequest): Promise<ListSessionsResponse> =>
+      ipcRenderer.invoke(IpcChannel.sessionList, req),
     onEvent: (listener: (event: EngineEvent) => void): (() => void) => {
       const wrapped = (_event: unknown, event: EngineEvent): void => listener(event)
       ipcRenderer.on(IpcChannel.engineEvent, wrapped)
@@ -40,6 +45,9 @@ const bridge: PwBridge = {
         ipcRenderer.removeListener(IpcChannel.engineEvent, wrapped)
       }
     },
+  },
+  sites: {
+    list: (): Promise<ListWebsitesResponse> => ipcRenderer.invoke(IpcChannel.sitesList),
   },
   models: {
     save: (req: ModelSaveRequest): Promise<ModelConfigView> => ipcRenderer.invoke(IpcChannel.modelSave, req),

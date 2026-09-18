@@ -28,6 +28,8 @@ describe('IPC channel contract', () => {
       'steer',
       'abort',
       'list-models',
+      'list-sessions',
+      'list-websites',
     ])
     expect(ENGINE_RESPONSE_KINDS).toEqual([
       'pong',
@@ -38,6 +40,8 @@ describe('IPC channel contract', () => {
       'steer',
       'abort',
       'models',
+      'sessions',
+      'websites',
       'error',
     ])
   })
@@ -52,6 +56,8 @@ describe('IPC channel contract', () => {
       steer: 'steer',
       abort: 'abort',
       'list-models': 'models',
+      'list-sessions': 'sessions',
+      'list-websites': 'websites',
     }
     const responses = new Set<string>(ENGINE_RESPONSE_KINDS)
     for (const [request, response] of Object.entries(REQUEST_TO_RESPONSE)) {

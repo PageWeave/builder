@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import {
   DefaultResourceLoader,
   ModelRuntime,
@@ -15,6 +15,10 @@ import { createMcpAdapter } from 'pi-mcp-adapter'
 import type {
   ConfigureRequest,
   ConfigureResponse,
+  ConversationSummary,
+  ListSessionsRequest,
+  ListSessionsResponse,
+  ListWebsitesResponse,
   ModelConfig,
   ModelListResponse,
   OpenSessionRequest,
@@ -22,11 +26,12 @@ import type {
   PromptRequest,
   SteerRequest,
 } from '../shared/ipc'
-import type { ModelOption } from '../shared/engine-events'
+import type { EngineEvent, ModelOption } from '../shared/engine-events'
 import { isModelProvider } from '../shared/ipc'
-import { mapSessionEvents } from './events'
+import { mapHistoryMessages, mapSessionEvents } from './events'
 import { ACCESS_TOKEN_ENV, buildMcpAdapterConfig } from './mcp-config'
 import { buildSystemPrompt } from './prompt'
+import { fetchWebsites } from './site-client'
 import { syncBundledSkills } from './skills'
 
 /**
@@ -109,14 +114,36 @@ export class SessionRunner {
       throw new Error('websiteId must be a short slug (letters, digits, dash)')
     }
     this.closeSession()
-    const session = await this.buildSession(req.websiteId)
+    const cwd = await this.websiteWorkDir(req.websiteId)
+    const sessionManager = await this.sessionManagerFor(req, cwd)
+    const session = await this.buildSession(req.websiteId, cwd, sessionManager)
     this.session = session
     this.activeWebsiteId = req.websiteId
     this.unsubscribeEvents = session.subscribe((event) => {
       for (const mapped of mapSessionEvents(event)) this.emit(mapped)
     })
     this.emit({ type: 'session', sessionId: session.sessionId, websiteId: req.websiteId })
+    this.emitHistory(session, req.websiteId)
     return { sessionId: session.sessionId }
+  }
+
+  /** Lists stored conversations (pi session files) for a website scope. */
+  async listSessions(req: ListSessionsRequest): Promise<ListSessionsResponse> {
+    if (!isSafeSegment(req.websiteId)) {
+      throw new Error('websiteId must be a short slug (letters, digits, dash)')
+    }
+    const cwd = join(this.workDir, req.websiteId)
+    const infos = await SessionManager.list(cwd)
+    const conversations = infos
+      .map(toConversationSummary)
+      .filter((summary): summary is NonNullable<typeof summary> => summary !== null)
+      .sort((a, b) => b.modified.localeCompare(a.modified))
+    return { conversations }
+  }
+
+  /** Direct read-only MCP call for the site picker (see DECISIONS D15). */
+  async listWebsites(): Promise<ListWebsitesResponse> {
+    return fetchWebsites()
   }
 
   prompt(req: PromptRequest): { accepted: boolean } {
@@ -208,7 +235,11 @@ export class SessionRunner {
     return this.modelRuntime
   }
 
-  private async buildSession(websiteId: string): Promise<AgentSession> {
+  private async buildSession(
+    websiteId: string,
+    cwd: string,
+    sessionManager: SessionManager,
+  ): Promise<AgentSession> {
     const config = this.modelConfig
     if (!config?.modelId) throw new Error('No model configured — connect a model first.')
 
@@ -216,7 +247,6 @@ export class SessionRunner {
     const model = await this.resolveModel(runtime, config)
 
     await syncBundledSkills(this.agentDir)
-    const cwd = await this.websiteWorkDir(websiteId)
 
     const extensionFactories: ExtensionFactory[] = [
       createMcpAdapter({ config: buildMcpAdapterConfig() }),
@@ -244,11 +274,38 @@ export class SessionRunner {
       model,
       modelRuntime: runtime,
       tools: ['read', 'grep'],
-      sessionManager: SessionManager.create(cwd),
+      sessionManager,
       settingsManager,
       resourceLoader: loader,
     })
     return session
+  }
+
+  /**
+   * Conversation selection (DECISIONS D15): `fresh` → brand-new session,
+   * `sessionPath` → switch to that stored conversation (must live inside the
+   * website's work directory), default → resume the most recent conversation
+   * (first open for a site creates one).
+   */
+  private async sessionManagerFor(req: OpenSessionRequest, cwd: string): Promise<SessionManager> {
+    if (req.fresh === true) return SessionManager.create(cwd)
+    if (req.sessionPath !== undefined) {
+      if (!isPathInside(cwd, req.sessionPath)) {
+        throw new Error('sessionPath must be a stored conversation inside this website scope')
+      }
+      return SessionManager.open(req.sessionPath, undefined, cwd)
+    }
+    const existing = await SessionManager.list(cwd)
+    if (existing.length === 0) return SessionManager.create(cwd)
+    return SessionManager.continueRecent(cwd)
+  }
+
+  /** Replays the stored transcript into the renderer after (re)opening. */
+  private emitHistory(session: AgentSession, websiteId: string): void {
+    const history = mapHistoryMessages(session.sessionId, websiteId, session.messages)
+    if (history.messages.length > 0) {
+      this.emit(history)
+    }
   }
 
   private async resolveModel(runtime: ModelRuntime, config: ModelConfig): Promise<Model<Api>> {
@@ -306,6 +363,46 @@ function sanitizeModelConfig(raw: ModelConfig): ModelConfig {
 
 function isSafeSegment(value: string): boolean {
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value)
+}
+
+/** Pure path guard: the stored-conversation handle must resolve inside the site's work dir. */
+export function isPathInside(dir: string, candidate: string): boolean {
+  const base = resolve(dir)
+  const target = resolve(candidate)
+  if (target === base) return false
+  return target.startsWith(base + sep)
+}
+
+/** Pure: pi SessionInfo → renderer-safe ConversationSummary. */
+export function toConversationSummary(info: unknown): ConversationSummary | null {
+  if (typeof info !== 'object' || info === null) return null
+  const record = info as Record<string, unknown>
+  const path = typeof record.path === 'string' && record.path !== '' ? record.path : null
+  const id = typeof record.id === 'string' && record.id !== '' ? record.id : null
+  if (!path || !id) return null
+  const first = typeof record.firstMessage === 'string' ? record.firstMessage : ''
+  const modified = toIsoTimestamp(record.modified)
+  if (!modified) return null
+  const messageCount = typeof record.messageCount === 'number' ? record.messageCount : 0
+  const name = typeof record.name === 'string' && record.name.trim() !== '' ? record.name.trim() : undefined
+  const summary: ConversationSummary = {
+    path,
+    id,
+    firstMessage: first.length > 200 ? `${first.slice(0, 200)}…` : first,
+    modified,
+    messageCount,
+    ...(name !== undefined ? { name } : {}),
+  }
+  return summary
+}
+
+function toIsoTimestamp(value: unknown): string | null {
+  if (value instanceof Date) {
+    const iso = value.toISOString()
+    return Number.isNaN(Date.parse(iso)) ? null : iso
+  }
+  if (typeof value === 'string' && Number.isFinite(Date.parse(value))) return value
+  return null
 }
 
 /**

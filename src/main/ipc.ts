@@ -81,13 +81,41 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannel.engineAbort, () => engineHost.abort())
 
   ipcMain.handle(IpcChannel.engineOpenSession, async (_event, req: unknown) => {
-    if (typeof req !== 'object' || req === null) throw new Error('invalid open-session request')
-    const websiteId = (req as { websiteId?: unknown }).websiteId
-    if (typeof websiteId !== 'string' || websiteId.length === 0 || websiteId.length > 64) {
-      throw new Error('invalid websiteId')
-    }
-    return engineHost.openSession({ websiteId })
+    return engineHost.openSession(parseOpenSessionRequest(req))
   })
+
+  ipcMain.handle(IpcChannel.sessionList, async (_event, req: unknown) => {
+    return engineHost.listSessions(parseWebsiteScope(req))
+  })
+
+  ipcMain.handle(IpcChannel.sitesList, () => engineHost.listWebsites())
+}
+
+/** Validates the open-session payload; sessionPath details are re-checked engine-side. */
+function parseOpenSessionRequest(req: unknown): { websiteId: string; sessionPath?: string; fresh?: boolean } {
+  const scope = parseWebsiteScope(req)
+  const record = req as Record<string, unknown>
+  const result: { websiteId: string; sessionPath?: string; fresh?: boolean } = { websiteId: scope.websiteId }
+  if (record.sessionPath !== undefined) {
+    if (typeof record.sessionPath !== 'string' || record.sessionPath.length > 1024 || record.sessionPath.length === 0) {
+      throw new Error('invalid sessionPath')
+    }
+    result.sessionPath = record.sessionPath
+  }
+  if (record.fresh !== undefined) {
+    if (typeof record.fresh !== 'boolean') throw new Error('invalid fresh flag')
+    result.fresh = record.fresh
+  }
+  return result
+}
+
+function parseWebsiteScope(req: unknown): { websiteId: string } {
+  if (typeof req !== 'object' || req === null) throw new Error('invalid request')
+  const websiteId = (req as { websiteId?: unknown }).websiteId
+  if (typeof websiteId !== 'string' || websiteId.length === 0 || websiteId.length > 64) {
+    throw new Error('invalid websiteId')
+  }
+  return { websiteId }
 }
 
 /**

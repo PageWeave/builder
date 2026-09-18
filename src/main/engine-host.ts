@@ -8,6 +8,9 @@ import type {
   EngineRequest,
   EngineResponse,
   EngineResponseKind,
+  ListSessionsRequest,
+  ListSessionsResponse,
+  ListWebsitesResponse,
   ModelListResponse,
   ModelProvider,
   OpenSessionRequest,
@@ -35,6 +38,8 @@ const REQUEST_TIMEOUT_MS: Partial<Record<EngineRequest['kind'], number>> = {
   steer: 10_000,
   abort: 10_000,
   'list-models': 60_000,
+  'list-sessions': 30_000,
+  'list-websites': 60_000,
 }
 const DEFAULT_TIMEOUT_MS = 10_000
 
@@ -136,6 +141,16 @@ export class EngineHost {
   async listModels(provider: ModelProvider): Promise<ModelListResponse> {
     const res = await this.request('list-models', { provider })
     return unwrap(res, 'models').payload
+  }
+
+  async listSessions(req: ListSessionsRequest): Promise<ListSessionsResponse> {
+    const res = await this.request('list-sessions', req)
+    return unwrap(res, 'sessions').payload
+  }
+
+  async listWebsites(): Promise<ListWebsitesResponse> {
+    const res = await this.request('list-websites', null)
+    return unwrap(res, 'websites').payload
   }
 
   stop(): void {
