@@ -22,7 +22,8 @@ async function connectModel(page: Page): Promise<void> {
   await page.getByPlaceholder('https://api.example.com/v1').fill('https://e2e.invalid/v1')
   await page.getByPlaceholder(/model id/).fill('e2e-model')
   await page.getByRole('button', { name: 'Connect model' }).last().click()
-  await expect(page.getByText('Debug console custom')).toBeVisible()
+  // The toolbar badge renders the connected provider as its own text node.
+  await expect(page.getByText('custom', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Close' }).click()
 }
 
