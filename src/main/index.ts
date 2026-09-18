@@ -9,6 +9,7 @@ import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { registerIpcHandlers, syncModelToEngine } from './ipc'
 import { mainWindowOptions } from './window'
 import { isE2E } from './e2e'
+import { createAppUpdater } from './updater'
 import { tmpdir } from 'node:os'
 
 // Sandbox every renderer globally, not per-window opt-in.
@@ -21,6 +22,7 @@ if (isE2E()) {
 
 const engineHost = new EngineHost()
 const previewHost = new PreviewHost()
+const updater = createAppUpdater()
 let auth: AuthController | null = null
 let models: ModelStore | null = null
 const smokeMode = process.env.PW_SMOKE === '1'
@@ -98,6 +100,10 @@ function setupMenu(): void {
         { role: 'toggleDevTools' },
       ],
     },
+    {
+      role: 'help',
+      submenu: [{ label: 'Check for Updates…', click: () => void updater.checkInteractive() }],
+    },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
@@ -107,6 +113,7 @@ void app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
   setupMenu()
+  updater.init()
 
   const userData = app.getPath('userData')
   auth = new AuthController({ storePath: join(userData, 'auth.enc') })
