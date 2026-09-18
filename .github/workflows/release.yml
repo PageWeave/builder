@@ -1,0 +1,56 @@
+# M5 release pipeline. Cutting a release = push a v* tag; electron-builder
+# builds signed (when secrets are present) mac + Windows installers and
+# publishes them to a DRAFT GitHub Release (feed for electron-updater per
+# electron-builder.yml § publish). Publish the draft after smoke-testing —
+# full checklist in docs/RELEASE.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # CSC_LINK/CSC_KEY_PASSWORD sign; APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/
+      # APPLE_TEAM_ID notarize. Without them the build is unsigned (fine for
+      # dry-run drafts; real users need signed+notarized — see RELEASE.md).
+      - name: Build + notarize + publish draft
+        run: npx electron-builder --mac --publish always
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build + sign + publish draft
+        run: npx electron-builder --win --publish always
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
