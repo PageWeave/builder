@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { closeApp, launchApp } from './launch'
 
 /**
@@ -7,6 +7,24 @@ import { closeApp, launchApp } from './launch'
  * prompt event sequence. The real engine process boots and answers pings —
  * only display/keyring/network-dependent responses are canned.
  */
+
+/** Each test gets a fresh app instance (userData is E2E-isolated). */
+async function signIn(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Sign in' }).first().click()
+  await expect(page.getByText('Signed in')).toBeVisible()
+}
+
+/** Connects the canned E2E model through the debug console form. */
+async function connectModel(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Connect model' }).click()
+  await expect(page.getByText('Cmd/Ctrl+Shift+D to toggle')).toBeVisible()
+  await page.locator('select').selectOption('custom')
+  await page.getByPlaceholder('https://api.example.com/v1').fill('https://e2e.invalid/v1')
+  await page.getByPlaceholder(/model id/).fill('e2e-model')
+  await page.getByRole('button', { name: 'Connect model' }).last().click()
+  await expect(page.getByText('Debug console custom')).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+}
 
 test.describe('first-run flow (stubs)', () => {
   let launched: Awaited<ReturnType<typeof launchApp>>
@@ -24,34 +42,23 @@ test.describe('first-run flow (stubs)', () => {
     await expect(page.getByText('Getting started')).toBeVisible()
     await expect(page.getByText('Sign in to PageWeave')).toBeVisible()
 
-    const signInButtons = page.getByRole('button', { name: 'Sign in' })
-    await expect(signInButtons.first()).toBeVisible()
-    await signInButtons.first().click()
+    await page.getByRole('button', { name: 'Sign in' }).first().click()
     await expect(page.getByText('Signed in')).toBeVisible()
   })
 
   test('connect model via the debug console clears the model gate', async () => {
     const { page } = launched
-    await page.getByRole('button', { name: 'Sign in' }).first().click()
-    await page.getByRole('button', { name: 'Connect model' }).click()
+    await signIn(page)
+    await connectModel(page)
 
-    // The debug console opens with the model form visible.
-    await expect(page.getByText('Cmd/Ctrl+Shift+D to toggle')).toBeVisible()
-    await page.locator('select').selectOption('custom')
-    await page.getByPlaceholder('https://api.example.com/v1').fill('https://e2e.invalid/v1')
-    await page.getByPlaceholder(/model id/).fill('e2e-model')
-    await page.getByRole('button', { name: 'Connect model' }).last().click()
-
-    // Stepper: model step done → hint for the site step remains.
-    await expect(page.getByText('Pick or create a site')).toBeVisible()
-    // Back to the product chat.
-    await page.getByRole('button', { name: 'Close' }).click()
+    // Gates satisfied for auth+model — the card is gone; the chat hints at sites.
     await expect(page.getByPlaceholder(/Pick a site in the sidebar/)).toBeVisible()
   })
 
   test('site picker shows the canned site and selecting it activates chat', async () => {
     const { page } = launched
-    await page.getByRole('button', { name: 'Sign in' }).first().click()
+    await signIn(page)
+    await connectModel(page)
     await expect(page.getByText('Demo Site')).toBeVisible()
 
     await page.getByRole('button', { name: 'Demo Site' }).click()
@@ -62,8 +69,10 @@ test.describe('first-run flow (stubs)', () => {
 
   test('prompt streams canned events and surfaces the confirmation card', async () => {
     const { page } = launched
-    await page.getByRole('button', { name: 'Sign in' }).first().click()
+    await signIn(page)
+    await connectModel(page)
     await page.getByRole('button', { name: 'Demo Site' }).click()
+
     const composer = page.getByPlaceholder('Ask the agent to build something…')
     await composer.fill('Make the hero bigger')
     await composer.press('Enter')
