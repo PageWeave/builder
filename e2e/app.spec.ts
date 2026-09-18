@@ -51,6 +51,7 @@ test.describe('first-run flow (stubs)', () => {
 
   test('site picker shows the canned site and selecting it activates chat', async () => {
     const { page } = launched
+    await page.getByRole('button', { name: 'Sign in' }).first().click()
     await expect(page.getByText('Demo Site')).toBeVisible()
 
     await page.getByRole('button', { name: 'Demo Site' }).click()
@@ -61,6 +62,7 @@ test.describe('first-run flow (stubs)', () => {
 
   test('prompt streams canned events and surfaces the confirmation card', async () => {
     const { page } = launched
+    await page.getByRole('button', { name: 'Sign in' }).first().click()
     await page.getByRole('button', { name: 'Demo Site' }).click()
     const composer = page.getByPlaceholder('Ask the agent to build something…')
     await composer.fill('Make the hero bigger')

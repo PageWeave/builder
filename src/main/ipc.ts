@@ -11,7 +11,15 @@ import {
 } from '../shared/ipc'
 import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { isPingRequest } from '../engine/ping'
-import { E2E_CONVERSATIONS, E2E_MODEL_VIEW, E2E_SESSION_ID, E2E_SITES, e2ePromptEvents, isE2E } from './e2e'
+import {
+  E2E_CONVERSATIONS,
+  E2E_SESSION_ID,
+  E2E_SITES,
+  e2eModelView,
+  e2ePromptEvents,
+  e2eSaveModel,
+  isE2E,
+} from './e2e'
 import type { EngineHost } from './engine-host'
 import type { AuthController } from './auth/controller'
 import type { ModelStore } from './models/store'
@@ -60,13 +68,14 @@ export function registerIpcHandlers(
     }
   }
 
-  ipcMain.handle(IpcChannel.modelGetState, (): ModelConfigView => (isE2E() ? E2E_MODEL_VIEW : models.view()))
+  ipcMain.handle(IpcChannel.modelGetState, (): ModelConfigView => (isE2E() ? e2eModelView() : models.view()))
 
   ipcMain.handle(IpcChannel.modelSave, async (_event, req: unknown): Promise<ModelConfigView> => {
     const patch = parseModelSaveRequest(req)
     if (isE2E()) {
-      broadcastModel(E2E_MODEL_VIEW)
-      return E2E_MODEL_VIEW
+      const view = e2eSaveModel()
+      broadcastModel(view)
+      return view
     }
     const view = await models.update(patch)
     await syncModelToEngine(engineHost, models)

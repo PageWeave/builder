@@ -20,6 +20,18 @@ export const E2E_MODEL_VIEW: ModelConfigView = {
   baseUrl: 'https://e2e.invalid/v1',
 }
 
+/** Gate state: no model until the E2E run "connects" one. */
+let e2eModelSaved = false
+
+export function e2eModelView(): ModelConfigView {
+  return e2eModelSaved ? E2E_MODEL_VIEW : null
+}
+
+export function e2eSaveModel(): ModelConfigView {
+  e2eModelSaved = true
+  return E2E_MODEL_VIEW
+}
+
 export const E2E_SITES: WebsiteSummary[] = [
   {
     id: 'e2e-site-1',
