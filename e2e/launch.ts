@@ -14,6 +14,9 @@ export async function launchApp(): Promise<E2EApp> {
   })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
+  // domcontentloaded ≠ React mounted: wait for the shell before interacting,
+  // so main→renderer pushes (menu toggle, events) always hit live listeners.
+  await page.getByText('PageWeave Builder').first().waitFor()
   return { app, page }
 }
 
