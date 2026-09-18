@@ -3,6 +3,7 @@ import {
   IpcChannel,
   isModelProvider,
   type AppVersions,
+  type AuthState,
   type ModelConfigView,
   type ModelListResponse,
   type ModelSaveRequest,
@@ -10,6 +11,7 @@ import {
 } from '../shared/ipc'
 import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { isPingRequest } from '../engine/ping'
+import { E2E_CONVERSATIONS, E2E_MODEL_VIEW, E2E_SESSION_ID, E2E_SITES, e2ePromptEvents, isE2E } from './e2e'
 import type { EngineHost } from './engine-host'
 import type { AuthController } from './auth/controller'
 import type { ModelStore } from './models/store'
@@ -45,7 +47,10 @@ export function registerIpcHandlers(
 
   // Auth handlers take no payload — nothing to validate. They return state
   // only; tokens never cross this boundary.
-  ipcMain.handle(IpcChannel.authSignIn, () => auth.signIn())
+  ipcMain.handle(IpcChannel.authSignIn, (): AuthState | Promise<AuthState> => {
+    if (isE2E()) return { status: 'signed-in' }
+    return auth.signIn()
+  })
   ipcMain.handle(IpcChannel.authSignOut, () => auth.signOut())
   ipcMain.handle(IpcChannel.authGetState, () => auth.getState())
 
@@ -55,10 +60,14 @@ export function registerIpcHandlers(
     }
   }
 
-  ipcMain.handle(IpcChannel.modelGetState, (): ModelConfigView => models.view())
+  ipcMain.handle(IpcChannel.modelGetState, (): ModelConfigView => (isE2E() ? E2E_MODEL_VIEW : models.view()))
 
   ipcMain.handle(IpcChannel.modelSave, async (_event, req: unknown): Promise<ModelConfigView> => {
     const patch = parseModelSaveRequest(req)
+    if (isE2E()) {
+      broadcastModel(E2E_MODEL_VIEW)
+      return E2E_MODEL_VIEW
+    }
     const view = await models.update(patch)
     await syncModelToEngine(engineHost, models)
     broadcastModel(view)
@@ -74,11 +83,20 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IpcChannel.modelList, async (_event, provider: unknown): Promise<ModelListResponse> => {
     if (!isModelProvider(provider)) throw new Error('invalid provider')
+    if (isE2E()) {
+      return {
+        models: [{ provider, id: 'e2e-model', name: 'E2E Model', contextWindow: 128_000, reasoning: false }],
+      }
+    }
     return engineHost.listModels(provider)
   })
 
   ipcMain.handle(IpcChannel.enginePrompt, async (_event, req: unknown) => {
     if (!isPromptRequest(req)) throw new Error('invalid prompt request')
+    if (isE2E()) {
+      engineHost.emitTestEvents(e2ePromptEvents())
+      return { accepted: true }
+    }
     return engineHost.prompt(req)
   })
 
@@ -90,14 +108,21 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannel.engineAbort, () => engineHost.abort())
 
   ipcMain.handle(IpcChannel.engineOpenSession, async (_event, req: unknown) => {
-    return engineHost.openSession(parseOpenSessionRequest(req))
+    const parsed = parseOpenSessionRequest(req)
+    if (isE2E()) {
+      engineHost.emitTestEvents([{ type: 'session', sessionId: E2E_SESSION_ID, websiteId: parsed.websiteId }])
+      return { sessionId: E2E_SESSION_ID }
+    }
+    return engineHost.openSession(parsed)
   })
 
   ipcMain.handle(IpcChannel.sessionList, async (_event, req: unknown) => {
+    parseWebsiteScope(req)
+    if (isE2E()) return { conversations: E2E_CONVERSATIONS }
     return engineHost.listSessions(parseWebsiteScope(req))
   })
 
-  ipcMain.handle(IpcChannel.sitesList, () => engineHost.listWebsites())
+  ipcMain.handle(IpcChannel.sitesList, () => (isE2E() ? { websites: E2E_SITES } : engineHost.listWebsites()))
 
   ipcMain.handle(IpcChannel.previewSetBounds, (_event, raw: unknown): void => {
     preview.setBounds(parsePreviewBounds(raw))

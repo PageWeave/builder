@@ -8,9 +8,16 @@ import { IpcChannel } from '../shared/ipc'
 import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { registerIpcHandlers, syncModelToEngine } from './ipc'
 import { mainWindowOptions } from './window'
+import { isE2E } from './e2e'
+import { tmpdir } from 'node:os'
 
 // Sandbox every renderer globally, not per-window opt-in.
 app.enableSandbox()
+
+// E2E runs never touch real user data (Playwright _electron drives the app).
+if (isE2E()) {
+  app.setPath('userData', join(tmpdir(), 'pageweave-builder-e2e'))
+}
 
 const engineHost = new EngineHost()
 const previewHost = new PreviewHost()

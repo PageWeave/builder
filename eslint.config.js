@@ -9,7 +9,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
-    files: ['src/main/**/*.{ts,tsx}', 'src/preload/**/*.ts', 'src/engine/**/*.ts', 'src/shared/**/*.ts', 'tests/**/*.ts'],
+    files: ['src/main/**/*.{ts,tsx}', 'src/preload/**/*.ts', 'src/engine/**/*.ts', 'src/shared/**/*.ts', 'tests/**/*.ts', 'e2e/**/*.ts', 'playwright.config.ts'],
     languageOptions: {
       globals: { ...globals.node },
       parserOptions: {

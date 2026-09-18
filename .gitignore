@@ -7,3 +7,6 @@ coverage/
 .DS_Store
 .env
 .env.*
+# Playwright E2E artifacts
+test-results/
+playwright-report/

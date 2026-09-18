@@ -21,7 +21,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "sync:docs": "node scripts/sync-platform-docs.mjs"
+    "sync:docs": "node scripts/sync-platform-docs.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.85.1",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "24.13.5",
     "@types/react": "19.3.0",

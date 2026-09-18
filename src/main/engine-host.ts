@@ -162,6 +162,17 @@ export class EngineHost {
     this.port = null
   }
 
+  /**
+   * E2E only (PW_E2E=1): fans canned events through the REAL listener
+   * fan-out, so E2E exercises the exact event plumbing the live engine uses.
+   */
+  emitTestEvents(events: EngineEvent[]): void {
+    if (process.env.PW_E2E !== '1') throw new Error('emitTestEvents is E2E-only')
+    for (const event of events) {
+      for (const listener of this.eventListeners) listener(event)
+    }
+  }
+
   private request<K extends EngineRequest['kind']>(
     kind: K,
     payload: Extract<EngineRequest, { kind: K }>['payload'],
