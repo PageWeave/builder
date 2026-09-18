@@ -1,2 +1,4 @@
 @import "tailwindcss";
 @plugin "daisyui";
+/* Streaming markdown base styles for agent chat (CSP-safe, no inline styles). */
+@import "stream-md/styles.css";

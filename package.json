@@ -31,7 +31,8 @@
     "openid-client": "6.8.8",
     "pi-mcp-adapter": "2.34.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "stream-md": "0.2.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

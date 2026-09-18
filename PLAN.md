@@ -52,7 +52,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | M1 — Electron skeleton + CI | ✅ done (2026-09-16) |
 | M2 — Auth (OAuth, token storage) | ✅ done (2026-09-17) — real-browser sign-in round-trip pending user acceptance run |
 | M3 — Engine (Pi + MCP + BYOK) | ✅ done (2026-09-18) — live acceptance run pending (needs model key + PageWeave account) |
-| M4 — Product UI | ◐ C1 done (2026-09-18) |
+| M4 — Product UI | ◐ C1–C3 done (2026-09-18); C4 preview + C5 E2E next |
 | M3 — Engine (Pi + MCP adapter, BYOK UI, debug console) | ⬜ |
 | M4 — Product UI (chat, site picker, preview) | ⬜ |
 | M5 — Ship (signing, notarization, auto-update, installers) | ⬜ |

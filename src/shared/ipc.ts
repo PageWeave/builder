@@ -36,6 +36,10 @@ export const IpcChannel = {
   sessionList: 'session:list',
   /** List the user's PageWeave websites (engine-side direct MCP call). */
   sitesList: 'sites:list',
+  /** Open a validated external URL in the system browser (main-side allowlist). */
+  appOpenExternal: 'app:openExternal',
+  /** Main → renderer push when the menu toggles the debug console. */
+  debugToggle: 'debug:toggle',
   /** Main → renderer push for engine streaming events. */
   engineEvent: 'engine:event',
   /** Start the OAuth sign-in flow (system browser + loopback callback). */
@@ -151,6 +155,10 @@ export interface PwBridge {
   }
   app: {
     versions(): Promise<AppVersions>
+    /** Opens an https pageweave URL in the system browser. Rejected URLs throw. */
+    openExternal(url: string): Promise<void>
+    /** Subscribes to debug-console toggles from the app menu. Returns unsubscribe. */
+    onDebugToggle(listener: () => void): () => void
   }
   auth: {
     signIn(): Promise<AuthState>

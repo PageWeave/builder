@@ -1,9 +1,10 @@
-import { BrowserWindow, app, session, shell } from 'electron'
+import { BrowserWindow, Menu, app, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { join } from 'node:path'
 import { AuthController } from './auth/controller'
 import { EngineHost } from './engine-host'
 import { ModelStore, safeStorageModelEncryptor } from './models/store'
 import { IpcChannel } from '../shared/ipc'
+import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { registerIpcHandlers, syncModelToEngine } from './ipc'
 import { mainWindowOptions } from './window'
 
@@ -20,11 +21,14 @@ function createWindow(): BrowserWindow {
   win.on('ready-to-show', () => win.show())
 
   // Navigation fence: the app shell never navigates away. The M4 preview pane
-  // gets its own WebContentsView + partition with its own fence.
+  // gets its own WebContentsView + partition with its own fence. Allowlisted
+  // https links (chat markdown links, confirmation URLs) open in the system
+  // browser instead.
   win.webContents.on('will-navigate', (event, url) => {
     const devUrl = process.env.ELECTRON_RENDERER_URL
     if (devUrl && url.startsWith(devUrl)) return
     event.preventDefault()
+    if (isAllowedExternalUrl(url)) void shell.openExternal(url)
   })
 
   // No popups, ever. https links go to the system browser (validated).
@@ -58,10 +62,40 @@ async function syncEngineState(): Promise<void> {
   }
 }
 
+/** Application menu: Edit roles (clipboard) + View menu with the debug console toggle. */
+function setupMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' as const }] : []),
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Debug Console',
+          accelerator: 'CmdOrCtrl+Shift+D',
+          click: () => {
+            for (const win of BrowserWindow.getAllWindows()) {
+              if (!win.isDestroyed()) win.webContents.send(IpcChannel.debugToggle)
+            }
+          },
+        },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'toggleDevTools' },
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 void app.whenReady().then(() => {
   // Deny-all permission requests and checks on the default session.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
+  setupMenu()
 
   const userData = app.getPath('userData')
   auth = new AuthController({ storePath: join(userData, 'auth.enc') })

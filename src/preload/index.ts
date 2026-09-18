@@ -64,6 +64,14 @@ const bridge: PwBridge = {
   },
   app: {
     versions: (): Promise<AppVersions> => ipcRenderer.invoke(IpcChannel.appVersions),
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke(IpcChannel.appOpenExternal, url),
+    onDebugToggle: (listener: () => void): (() => void) => {
+      const wrapped = (): void => listener()
+      ipcRenderer.on(IpcChannel.debugToggle, wrapped)
+      return () => {
+        ipcRenderer.removeListener(IpcChannel.debugToggle, wrapped)
+      }
+    },
   },
   auth: {
     signIn: (): Promise<AuthState> => ipcRenderer.invoke(IpcChannel.authSignIn),

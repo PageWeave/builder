@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import {
   IpcChannel,
   isModelProvider,
@@ -7,6 +7,7 @@ import {
   type ModelListResponse,
   type ModelSaveRequest,
 } from '../shared/ipc'
+import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { isPingRequest } from '../engine/ping'
 import type { EngineHost } from './engine-host'
 import type { AuthController } from './auth/controller'
@@ -32,6 +33,12 @@ export function registerIpcHandlers(
     electron: process.versions.electron ?? 'unknown',
     node: process.versions.node ?? 'unknown',
   }))
+
+  ipcMain.handle(IpcChannel.appOpenExternal, (_event, raw: unknown): void => {
+    if (typeof raw !== 'string' || raw.length > 2048) throw new Error('invalid url')
+    if (!isAllowedExternalUrl(raw)) throw new Error('url not allowed')
+    void shell.openExternal(raw)
+  })
 
   // Auth handlers take no payload — nothing to validate. They return state
   // only; tokens never cross this boundary.

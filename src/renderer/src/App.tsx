@@ -11,6 +11,7 @@ import type {
 import type { EngineEvent } from '../../shared/engine-events'
 import { DEBUG_WEBSITE_ID } from '../../shared/ipc'
 import Sidebar from './components/Sidebar'
+import Chat from './components/Chat'
 import DebugConsole from './components/DebugConsole'
 import { useConversations, useSites } from './hooks/app-data'
 import { errorMessage } from './hooks/error'
@@ -54,6 +55,7 @@ export default function App() {
   const [session, setSession] = useState<SessionInfo>({ sessionId: null, websiteId: null })
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [outgoing, setOutgoing] = useState<{ text: string; nonce: number } | null>(null)
+  const [showDebug, setShowDebug] = useState(false)
 
   const modelConnected = modelConfig !== null && modelConfig.modelId !== undefined
 
@@ -68,12 +70,17 @@ export default function App() {
       setAuth(state)
       if (state.status !== 'signed-in') setActiveSite(null)
     })
-    void window.pw.models.getState().then(setModelConfig).catch(() => {})
+    const unsubscribeDebug = window.pw.app.onDebugToggle(() => setShowDebug((open) => !open))
+    void window.pw.models
+      .getState()
+      .then(setModelConfig)
+      .catch(() => {})
     const unsubscribeModel = window.pw.models.onChanged(setModelConfig)
     void window.pw.app.versions().then(setVersions).catch(() => {})
     return () => {
       unsubscribeAuth()
       unsubscribeModel()
+      unsubscribeDebug()
     }
   }, [])
 
@@ -244,7 +251,10 @@ export default function App() {
                       <button
                         type="button"
                         className="btn btn-primary btn-xs"
-                        onClick={() => setModelFormOpen(true)}
+                        onClick={() => {
+                          setShowDebug(true)
+                          setModelFormOpen(true)
+                        }}
                       >
                         Connect model
                       </button>
@@ -263,13 +273,33 @@ export default function App() {
             </div>
           )}
           <div className="min-h-0 flex-1">
-            <DebugConsole
-              auth={auth}
-              modelConnected={modelConnected}
-              modelFormOpen={modelFormOpen}
-              onModelFormOpen={setModelFormOpen}
-              outgoing={outgoing}
-            />
+            {showDebug ? (
+              <div className="flex h-full flex-col">
+                <div className="flex items-center gap-2 border-b border-base-300 bg-base-200 px-3 py-1 text-xs">
+                  <span className="font-semibold uppercase opacity-60">Debug console</span>
+                  <span className="opacity-50">Cmd/Ctrl+Shift+D to toggle</span>
+                  <button type="button" className="btn btn-ghost btn-xs ml-auto" onClick={() => setShowDebug(false)}>
+                    Close
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1">
+                  <DebugConsole
+                    auth={auth}
+                    modelConnected={modelConnected}
+                    modelFormOpen={modelFormOpen}
+                    onModelFormOpen={setModelFormOpen}
+                    outgoing={outgoing}
+                  />
+                </div>
+              </div>
+            ) : (
+              <Chat
+                authStatus={auth.status}
+                modelConnected={modelConnected}
+                sessionId={session.sessionId}
+                outgoing={outgoing}
+              />
+            )}
           </div>
         </section>
 
