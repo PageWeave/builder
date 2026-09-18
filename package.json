@@ -22,21 +22,19 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "sync:docs": "node scripts/sync-platform-docs.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "dist:dir": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder"
   },
   "dependencies": {
+    "@silvia-odwyer/photon-node": "0.3.4"
+  },
+  "devDependencies": {
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "openid-client": "6.8.8",
-    "pi-mcp-adapter": "2.34.0",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "stream-md": "0.2.0"
-  },
-  "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "24.13.5",
@@ -45,11 +43,18 @@
     "@vitejs/plugin-react": "5.2.0",
     "daisyui": "5.7.38",
     "electron": "44.4.1",
+    "electron-builder": "26.15.3",
+    "electron-updater": "6.8.9",
     "electron-vite": "5.0.0",
     "eslint": "10.10.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.7",
     "globals": "17.12.0",
+    "openid-client": "6.8.8",
+    "pi-mcp-adapter": "2.34.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "stream-md": "0.2.0",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "typescript-eslint": "8.70.0",
@@ -59,5 +64,6 @@
   "allowScripts": {
     "esbuild": true,
     "electron": true
-  }
+  },
+  "author": "PageWeave"
 }
