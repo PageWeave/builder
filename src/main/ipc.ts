@@ -6,12 +6,14 @@ import {
   type ModelConfigView,
   type ModelListResponse,
   type ModelSaveRequest,
+  type PreviewBounds,
 } from '../shared/ipc'
 import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { isPingRequest } from '../engine/ping'
 import type { EngineHost } from './engine-host'
 import type { AuthController } from './auth/controller'
 import type { ModelStore } from './models/store'
+import type { PreviewHost } from './preview'
 
 /**
  * Registers the renderer-facing IPC surface. Every handler validates its
@@ -22,6 +24,7 @@ export function registerIpcHandlers(
   engineHost: EngineHost,
   auth: AuthController,
   models: ModelStore,
+  preview: PreviewHost,
 ): void {
   ipcMain.handle(IpcChannel.enginePing, (_event, req: unknown) => {
     if (!isPingRequest(req)) throw new Error('invalid ping request')
@@ -95,6 +98,21 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle(IpcChannel.sitesList, () => engineHost.listWebsites())
+
+  ipcMain.handle(IpcChannel.previewSetBounds, (_event, raw: unknown): void => {
+    preview.setBounds(parsePreviewBounds(raw))
+  })
+
+  ipcMain.handle(IpcChannel.previewLoad, (_event, req: unknown): void => {
+    if (typeof req !== 'object' || req === null) throw new Error('invalid preview request')
+    const url = (req as { url?: unknown }).url
+    if (typeof url !== 'string' || url.length > 2048) throw new Error('invalid preview url')
+    preview.load(url)
+  })
+
+  ipcMain.handle(IpcChannel.previewRefresh, (): void => {
+    preview.refresh()
+  })
 }
 
 /** Validates the open-session payload; sessionPath details are re-checked engine-side. */
@@ -122,6 +140,20 @@ function parseWebsiteScope(req: unknown): { websiteId: string } {
     throw new Error('invalid websiteId')
   }
   return { websiteId }
+}
+
+/** Renderer-reported bounds are untrusted: shape + finiteness validated (details in preview.ts). */
+function parsePreviewBounds(raw: unknown): PreviewBounds | null {
+  if (raw === null) return null
+  if (typeof raw !== 'object' || raw === null) throw new Error('invalid preview bounds')
+  const record = raw as { x?: number; y?: number; width?: number; height?: number }
+  const { x, y, width, height } = record
+  for (const value of [x, y, width, height]) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('invalid preview bounds')
+  }
+  if (typeof width === 'number' && width < 0) throw new Error('invalid preview bounds')
+  if (typeof height === 'number' && height < 0) throw new Error('invalid preview bounds')
+  return { x: x as number, y: y as number, width: width as number, height: height as number }
 }
 
 /**

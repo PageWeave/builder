@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AppVersions,
   AuthState,
@@ -13,6 +13,7 @@ import { DEBUG_WEBSITE_ID } from '../../shared/ipc'
 import Sidebar from './components/Sidebar'
 import Chat from './components/Chat'
 import DebugConsole from './components/DebugConsole'
+import PreviewPane from './components/PreviewPane'
 import { useConversations, useSites } from './hooks/app-data'
 import { errorMessage } from './hooks/error'
 
@@ -38,6 +39,9 @@ function buildCreateSitePrompt(name: string): string {
 /** Names of MCP tools that change the site list worth refreshing for. */
 const SITE_MUTATION_TOOLS = /create_website|update_website|delete_website/
 
+/** Tools that change site content the preview should reload for. */
+const CONTENT_MUTATION_TOOLS = /^mcp__pageweave__(?:(?!get|list|search|describe).)+$/
+
 export default function App() {
   const [versions, setVersions] = useState<AppVersions | null>(null)
   const [result, setResult] = useState<PingResult | null>(null)
@@ -56,6 +60,8 @@ export default function App() {
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [outgoing, setOutgoing] = useState<{ text: string; nonce: number } | null>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [previewNonce, setPreviewNonce] = useState(0)
+  const previewRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const modelConnected = modelConfig !== null && modelConfig.modelId !== undefined
 
@@ -93,16 +99,26 @@ export default function App() {
     }
   }, [])
 
-  /* Engine lifecycle events: session tracking + site-list maintenance. */
+  /* Engine lifecycle events: session tracking + site-list maintenance + preview refresh. */
   useEffect(() => {
     const unsubscribe = window.pw.engine.onEvent((event: EngineEvent) => {
       switch (event.type) {
         case 'session':
           setSession({ sessionId: event.sessionId, websiteId: event.websiteId })
           break
-        case 'tool_end':
-          if (!event.isError && SITE_MUTATION_TOOLS.test(event.name)) void refreshSites()
+        case 'tool_end': {
+          if (event.isError) break
+          if (SITE_MUTATION_TOOLS.test(event.name)) void refreshSites()
+          if (CONTENT_MUTATION_TOOLS.test(event.name) && activeSite) {
+            // The agent often fires several edits back-to-back — refresh once.
+            if (previewRefreshTimer.current) clearTimeout(previewRefreshTimer.current)
+            previewRefreshTimer.current = setTimeout(() => {
+              previewRefreshTimer.current = null
+              setPreviewNonce((n) => n + 1)
+            }, 2_000)
+          }
           break
+        }
         case 'agent_end':
           // A fresh conversation may have been created while the agent worked.
           if (activeSite) void refreshConversations()
@@ -303,16 +319,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="bg-base-100 p-4">
-          <h2 className="mb-2 text-xs font-semibold uppercase opacity-60">Preview</h2>
-          {activeSite ? (
-            <p className="text-sm opacity-50">
-              Live preview of “{activeSite.name}” arrives with the preview pane.
-            </p>
-          ) : (
-            <p className="text-sm opacity-50">Select a site to preview it here.</p>
-          )}
-        </section>
+        <PreviewPane site={activeSite} refreshNonce={previewNonce} />
       </main>
 
       <footer className="flex items-center gap-3 border-t border-base-300 px-4 py-2 text-sm">

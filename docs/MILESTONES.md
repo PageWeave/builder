@@ -42,7 +42,9 @@ Tasks (done per DECISIONS D14):
 
 **Accept when (live, needs user machine + PageWeave account + model key):** "list my websites" → MCP `list_websites` over HTTPS with Bearer auth returns real sites; a page-editing prompt round-trips (`get_page` → `update_page`); confirmation workflow URLs surface in tool results; a long session compacts without breaking. Also measure directTools vs proxy prompt-token cost (D14). Automated coverage so far: 49 tests (envelope mapping, MCP config contract, skills/prompts, IPC contract incl. new engine kinds) + build (15.15 MB single-file engine chunk) + CI boot smoke.
 
-## M4 — Product UI (in progress — C1+C2+C3 done 2026-09-18)
+## M4 — Product UI (in progress — C1+C2+C3+C4 done 2026-09-18)
+
+C4 shipped: `src/main/preview.ts` PreviewHost (WebContentsView, persist partition, hardened webPreferences, deny-all window-open, allowlist-fenced navigation, validated bounds IPC), renderer PreviewPane with rect streaming (ResizeObserver + rAF), dev-env URL load, manual/open-in-browser buttons, 2 s debounced auto-refresh on content-mutation tool events.
 
 C3 shipped: product chat (stream-md markdown per D16, thinking/tool cards, confirmation buttons via the shared URL allowlist, abort, error surfaces), app:openExternal + debug:toggle IPC, menu View → Debug Console (Cmd/Ctrl+Shift+D), will-navigate fence routes allowlisted https links to the system browser, pure transcript reducer (73 tests).
 

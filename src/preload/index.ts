@@ -16,6 +16,8 @@ import {
   type OpenSessionResponse,
   type PingRequest,
   type PongResponse,
+  type PreviewBounds,
+  type PreviewLoadRequest,
   type PromptRequest,
   type PromptResponse,
   type PwBridge,
@@ -48,6 +50,12 @@ const bridge: PwBridge = {
   },
   sites: {
     list: (): Promise<ListWebsitesResponse> => ipcRenderer.invoke(IpcChannel.sitesList),
+  },
+  preview: {
+    setBounds: (bounds: PreviewBounds | null): Promise<void> =>
+      ipcRenderer.invoke(IpcChannel.previewSetBounds, bounds),
+    load: (req: PreviewLoadRequest): Promise<void> => ipcRenderer.invoke(IpcChannel.previewLoad, req),
+    refresh: (): Promise<void> => ipcRenderer.invoke(IpcChannel.previewRefresh),
   },
   models: {
     save: (req: ModelSaveRequest): Promise<ModelConfigView> => ipcRenderer.invoke(IpcChannel.modelSave, req),

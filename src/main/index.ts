@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { AuthController } from './auth/controller'
 import { EngineHost } from './engine-host'
 import { ModelStore, safeStorageModelEncryptor } from './models/store'
+import { PreviewHost } from './preview'
 import { IpcChannel } from '../shared/ipc'
 import { isAllowedExternalUrl } from '../shared/confirm-urls'
 import { registerIpcHandlers, syncModelToEngine } from './ipc'
@@ -12,13 +13,16 @@ import { mainWindowOptions } from './window'
 app.enableSandbox()
 
 const engineHost = new EngineHost()
+const previewHost = new PreviewHost()
 let auth: AuthController | null = null
 let models: ModelStore | null = null
 const smokeMode = process.env.PW_SMOKE === '1'
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow(mainWindowOptions(join(import.meta.dirname, '../preload/index.cjs')))
+  previewHost.attach(win)
   win.on('ready-to-show', () => win.show())
+  win.on('closed', () => previewHost.detach())
 
   // Navigation fence: the app shell never navigates away. The M4 preview pane
   // gets its own WebContentsView + partition with its own fence. Allowlisted
@@ -121,7 +125,7 @@ void app.whenReady().then(() => {
     }
   })
 
-  registerIpcHandlers(engineHost, auth, models)
+  registerIpcHandlers(engineHost, auth, models, previewHost)
   engineHost.start({
     agentDir: join(userData, 'agent'),
     workDir: join(userData, 'work'),

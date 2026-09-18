@@ -40,6 +40,12 @@ export const IpcChannel = {
   appOpenExternal: 'app:openExternal',
   /** Main → renderer push when the menu toggles the debug console. */
   debugToggle: 'debug:toggle',
+  /** Position/size of the reserved preview gap (window content coordinates). */
+  previewSetBounds: 'preview:setBounds',
+  /** Point the preview view at a validated site URL. */
+  previewLoad: 'preview:load',
+  /** Reload the current preview URL. */
+  previewRefresh: 'preview:refresh',
   /** Main → renderer push for engine streaming events. */
   engineEvent: 'engine:event',
   /** Start the OAuth sign-in flow (system browser + loopback callback). */
@@ -125,6 +131,19 @@ export interface ModelListResponse {
   models: import('./engine-events').ModelOption[]
 }
 
+/** Bounds in window-content (CSS px) coordinates; null hides the preview. */
+export interface PreviewBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Request payload for `IpcChannel.previewLoad`. */
+export interface PreviewLoadRequest {
+  url: string
+}
+
 /**
  * The full bridge surface exposed as `window.pw` by the preload script.
  * Renderer code may only ever call methods on this interface.
@@ -144,6 +163,14 @@ export interface PwBridge {
   sites: {
     /** Lists the user's PageWeave websites (direct MCP call in the engine). */
     list(): Promise<ListWebsitesResponse>
+  }
+  preview: {
+    /** Positions the native preview view; null hides it. */
+    setBounds(bounds: PreviewBounds | null): Promise<void>
+    /** Loads a validated site URL into the preview view. */
+    load(req: PreviewLoadRequest): Promise<void>
+    /** Reloads the current preview URL (no-op when nothing loaded). */
+    refresh(): Promise<void>
   }
   models: {
     save(req: ModelSaveRequest): Promise<ModelConfigView>
