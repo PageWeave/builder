@@ -1,6 +1,6 @@
 # PLAN.md — PageWeave Builder Master Plan
 
-Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-18 (M3).
+Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-18 (M5 plumbing).
 
 ## Vision
 
@@ -55,7 +55,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | M4 — Product UI | ✅ done (2026-09-18, 73 tests + 5 E2E specs) — live acceptance run pending |
 | M3 — Engine (Pi + MCP adapter, BYOK UI, debug console) | ⬜ |
 | M4 — Product UI (chat, site picker, preview) | ⬜ |
-| M5 — Ship (signing, notarization, auto-update, installers) | ⬜ next |
+| M5 — Ship | ◐ plumbing done (2026-09-18): builder config + hardened fuses, GitHub-Releases draft feed, updater + Help-menu check, release.yml, packaged-boot CI job, docs/RELEASE.md. BLOCKED on user: signing certs/secrets (RELEASE.md table), acceptance run, app icon |
 | M6+ — Gateway, Linux, publish/feedback UI | ⬜ |
 
 Full breakdown with acceptance criteria: [docs/MILESTONES.md](docs/MILESTONES.md).

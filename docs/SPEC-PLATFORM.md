@@ -51,7 +51,7 @@ No separate REST API in v1. Website list/details/site switching all flow through
 | Item | Value |
 |---|---|
 | Product name | PageWeave Builder |
-| App id | `dev.pageweave.builder` — **CONFIRM** reverse-DNS scheme preference (pageweave.dev → maybe `dev.pageweave.builder` is fine) |
+| App id | `dev.pageweave.builder` — reverse-DNS scheme adopted (D17, 2026-09-18); Windows GUID derives from it at build time |
 | Bundle ids (M5) | macOS `dev.pageweave.builder`, Windows GUID at build time |
 | User agent / API identification | Identify MCP requests with a product header if the platform supports one — **CONFIRM** (nice-to-have for telemetry/debugging server-side; platform analytics are server-side only) |
 
@@ -70,6 +70,6 @@ Skill set to ship in-app (SKILL.md files under engine resources): site-building 
 ## Platform-side tasks (tracked here; executed in the Rails repo with user approval)
 
 1. Optional: product-identification header for MCP requests (M3+, nice-to-have)
-2. M5: decide auto-update feed host (pageweave.dev static route vs GitHub releases)
+2. ~~M5: decide auto-update feed host~~ — RESOLVED 2026-09-18 (D17): GitHub Releases drafts via electron-updater; revisit only if branded download URLs become a requirement
 
 (The former "register desktop OAuth client" task was removed 2026-09-17: the platform's RFC 7591 dynamic registration makes it unnecessary — see DECISIONS D13. The former "confirm MCP endpoint/transports" task was resolved by the RFC 9728 metadata + client config docs.)

@@ -60,3 +60,7 @@ Never `npm install <pkg>@latest` blindly here. Check peer ranges (`npm view <pkg
 - electron-vite docs (dev, ESM support, multithreading): https://electron-vite.org/guide/
 - npm peer ranges verified 2026-09-16 (electron-vite 5.0.0, typescript-eslint 8.70.0, vitest 5.0.1, @tailwindcss/vite 4.3.3)
 - Official scaffolder for reference (we hand-rolled instead, see D12): `npm create @quick-start/electron@latest -- --template react-ts`
+
+## Packaging deps split (realized in M5, D17)
+
+The above red flag is now law: `dependencies` contains ONLY `@silvia-odwyer/photon-node` (the engine's one externalized import — it must resolve from node_modules in the asar). Everything else (pi packages, MCP SDK, openid-client, react, react-dom, stream-md, electron-updater) is bundled into `out/` by electron-vite and lives in devDependencies. electron-builder ships `files: out/**` + `dependencies` → 18 MB asar, no dead node_modules in the installer. When adding a runtime dep for main/engine: bundle it (default here) and put it in devDependencies — only add to `dependencies` if the bundler genuinely cannot absorb it (native/wasm loaders like photon).

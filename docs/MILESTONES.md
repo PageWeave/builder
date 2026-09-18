@@ -66,12 +66,14 @@ Tasks:
 ## M5 — Ship
 
 Tasks:
-1. `electron-builder`: macOS (dmg, universal or arm64+x64), Windows (nsis x64). App id/name per SPEC-PLATFORM.
-2. Signing: Apple Developer ID + notarization; Windows code signing cert (ask user which CA/EV). Requires secrets in CI — set up with user, never commit.
-3. Auto-update: `electron-updater` generic feed (host on pageweave.dev — platform task) or GitHub releases; staged rollout + rollback tested.
-4. Release checklist doc (`docs/RELEASE.md`): versions, signing, notes, update-feed update.
+1. ✅ `electron-builder` 26.15.3: macOS dmg (universal), Windows nsis x64 one-click per-user. App id `dev.pageweave.builder` (D17). Hardened fuses + ASAR integrity. Deps split: bundle ships with only photon-node in node_modules.
+2. ◐ Signing: release.yml is env-gated (CSC_*/APPLE_* secrets) and builds unsigned drafts without them. BLOCKED on user provisioning: Apple Developer ID + Windows cert (docs/RELEASE.md § secrets table).
+3. ✅ Auto-update: electron-updater 6.8.9, GitHub Releases draft feed (D17), silent download + install-on-quit + restart prompt, Help → Check for Updates. Staged rollout = draft → test → publish. Rollback = new patch version (no downgrades).
+4. ✅ `docs/RELEASE.md`: version/tag flow, secrets inventory, draft verification (codesign/spctl/Authenticode), updater behavior.
 
-**Accept when:** signed+notarized installers install clean on a clean macOS + Windows machine/VM; auto-update pulls a newer version end-to-end.
+CI gained a `package` job: electron-builder --dir on Linux + xvfb boot of the real asar bundle (packaging regressions surface before any release cut).
+
+**Accept when:** signed+notarized installers install clean on a clean macOS + Windows machine/VM; auto-update pulls a newer version end-to-end. (Not yet possible: needs certs + first tagged draft.)
 
 ## M6+ — Backlog (not committed)
 
