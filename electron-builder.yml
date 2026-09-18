@@ -1,0 +1,68 @@
+# PageWeave Builder — packaging config (M5).
+# Bundle everything into out/ (electron-vite, D12/D14); the only runtime
+# node_modules dependency is @silvia-odwyer/photon-node (externalized wasm
+# loader). Releases are GitHub drafts — publish them after smoke-testing.
+appId: dev.pageweave.builder
+productName: PageWeave Builder
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  # package.json ships (electron-builder adds it) so electron resolves
+  # "type": "module" and the main entry. Nothing else is needed: all deps are
+  # bundled except photon-node, which electron-builder pulls in via
+  # `dependencies` transitively.
+
+asar: true
+npmRebuild: false
+
+# Hardened fuses (electron-security skill, M5 checklist). Trade-off:
+# EnableNodeCliInspectArguments is OFF, which blocks future PACKAGED-app E2E
+# (see testing skill); the E2E suite runs the unpackaged build instead.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  grantFileProtocolExtraPrivileges: false
+  enableCookieEncryption: true
+  # ASAR integrity is only meaningful with OnlyLoadAppFromAsar (one without
+  # the other is bypassable via a sibling app/ folder) — keep both true.
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+
+# Auto-update feed: GitHub Releases drafts (DECISIONS D17). electron-updater
+# picks this up from the generated app-update.yml and verifies signatures —
+# do not disable that.
+publish:
+  provider: github
+  owner: PageWeave
+  repo: builder
+  releaseType: draft
+
+mac:
+  target:
+    - target: dmg
+      arch: [universal]
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Signs when CSC_LINK/CSC_KEY_PASSWORD are present; notarizes with
+  # APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID (docs/RELEASE.md).
+  notarize: true
+
+win:
+  target: nsis
+  signtoolOptions:
+    signingHashAlgorithms:
+      - sha256
+
+nsis:
+  # Non-technical users: one-click, per-user install (no admin prompt),
+  # app data survives uninstall.
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: false
+  deleteAppDataOnUninstall: false
