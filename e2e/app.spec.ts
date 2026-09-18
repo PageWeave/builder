@@ -69,7 +69,7 @@ test.describe('first-run flow (stubs)', () => {
   })
 
   test('prompt streams canned events and surfaces the confirmation card', async () => {
-    const { page } = launched
+    const { app, page } = launched
     await signIn(page)
     await connectModel(page)
     await page.getByRole('button', { name: 'Demo Site' }).click()
@@ -80,12 +80,25 @@ test.describe('first-run flow (stubs)', () => {
 
     await expect(page.getByText("Here's the hero update —")).toBeVisible()
     await expect(page.getByText('mcp__pageweave__update_page').first()).toBeVisible()
-    const confirm = page.getByRole('button', { name: /Review & confirm/ })
-    await expect(confirm).toBeVisible()
-    await confirm.click()
-    // openExternal failure (no browser in CI) is swallowed; the click itself
-    // exercised the validated IPC path without crashing.
-    await expect(page.getByText('This change needs your confirmation.')).toBeVisible()
+
+    // Confirmation is an always-visible alert row, not a collapsed-card button.
+    await expect(page.getByText('This change needs your confirmation')).toBeVisible()
+    await app.evaluate(({ shell }) => {
+      const g = globalThis as unknown as { __pwE2eLastExternal?: string | undefined }
+      g.__pwE2eLastExternal = undefined
+      // Official Playwright pattern for native main-process APIs: replace
+      // the method via evaluate so tests are deterministic (no OS browser).
+      const capture: typeof shell.openExternal = (url: string) => {
+        g.__pwE2eLastExternal = url
+        return Promise.resolve()
+      }
+      shell.openExternal = capture
+    })
+    await page.getByRole('button', { name: /Review & confirm/ }).click()
+    const captured = await app.evaluate(() => {
+      return (globalThis as unknown as { __pwE2eLastExternal?: string }).__pwE2eLastExternal
+    })
+    expect(captured).toBe('https://pageweave.dev/workflow/confirm/e2e')
   })
 
   test('debug console toggles via the menu push channel', async () => {

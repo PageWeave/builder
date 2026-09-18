@@ -21,6 +21,7 @@ export type ChatEntry =
   | { id: number; kind: 'assistant'; text: string; thinking?: string; streaming: boolean }
   | { id: number; kind: 'thinking'; text: string }
   | { id: number; kind: 'tool'; tool: ChatToolCall }
+  | { id: number; kind: 'confirm'; url: string }
   | { id: number; kind: 'status'; text: string }
   | { id: number; kind: 'error'; text: string }
 
@@ -80,6 +81,13 @@ export function applyChatEvent(entries: ChatEntry[], event: EngineEvent): ChatEn
         const confirmUrl = extractConfirmUrl(event.outputPreview ?? '')
         if (confirmUrl !== undefined) updated.confirmUrl = confirmUrl
         return updated
+      }).flatMap((entry) => {
+        // Confirmation is NEVER buried in a collapsed card — it gets its own
+        // always-visible row (non-technical users must see the action).
+        if (entry.kind === 'tool' && entry.tool.confirmUrl !== undefined && !hasConfirm(entries, entry.tool.callId)) {
+          return [entry, { id: nextEntryId(), kind: 'confirm', url: entry.tool.confirmUrl }]
+        }
+        return [entry]
       })
     }
     case 'status':
@@ -95,7 +103,15 @@ export function applyChatEvent(entries: ChatEntry[], event: EngineEvent): ChatEn
   }
 }
 
-/** Live deltas stream into the still-streaming assistant entry; otherwise open a new one. */
+/** True when a confirm row for this callId was already appended (no duplicates). */
+function hasConfirm(entries: ChatEntry[], callId: string): boolean {
+  return entries.some(
+    (entry) =>
+      entry.kind === 'confirm' &&
+      entries.some((e) => e.kind === 'tool' && e.tool.callId === callId && e.tool.confirmUrl === entry.url),
+  )
+}
+
 function appendToLastAssistant(entries: ChatEntry[], delta: string): ChatEntry[] {
   const last = entries[entries.length - 1]
   if (last && last.kind === 'assistant' && last.streaming) {
@@ -159,6 +175,9 @@ export function buildFromHistory(messages: HistoryMessage[]): ChatEntry[] {
           ...(confirmUrl !== undefined ? { confirmUrl } : {}),
         },
       })
+      if (confirmUrl !== undefined) {
+        out.push({ id: nextEntryId(), kind: 'confirm', url: confirmUrl })
+      }
     }
   }
   return out

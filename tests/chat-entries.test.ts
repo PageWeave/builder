@@ -44,10 +44,16 @@ describe('chat transcript reducer (pure)', () => {
       isError: false,
       outputPreview: 'needs confirmation: https://pageweave.dev/workflow/confirm/abc',
     })
-    expect(entries).toHaveLength(1)
+    expect(entries).toHaveLength(2)
     const tool = entries[0]?.kind === 'tool' ? entries[0].tool : null
     expect(tool?.status).toBe('ok')
     expect(tool?.confirmUrl).toBe('https://pageweave.dev/workflow/confirm/abc')
+    // Confirmation gets its own always-visible row (never buried in the collapsed card).
+    expect(entries[1]).toEqual({
+      id: entries[1]?.id,
+      kind: 'confirm',
+      url: 'https://pageweave.dev/workflow/confirm/abc',
+    })
   })
 
   it('matches tool_end to the right card and handles unknown ids', () => {
@@ -57,7 +63,7 @@ describe('chat transcript reducer (pure)', () => {
     entries = applyChatEvent(entries, { type: 'tool_end', callId: 'b', name: 'toolB', isError: true })
     expect(entries[0]?.kind === 'tool' && entries[0].tool.status).toBe('running')
     expect(entries[1]?.kind === 'tool' && entries[1].tool.status).toBe('failed')
-    expect(applyChatEvent(entries, { type: 'tool_end', callId: 'ghost', name: 'ghost', isError: false })).toBe(entries)
+    expect(applyChatEvent(entries, { type: 'tool_end', callId: 'ghost', name: 'ghost', isError: false })).toEqual(entries)
   })
 
   it('resets on session events and appends status/error rows', () => {
@@ -74,9 +80,10 @@ describe('chat transcript reducer (pure)', () => {
       { role: 'assistant', text: 'hello', thinking: 'thought', toolCalls: [{ id: 't1', name: 'grep', isError: false, outputPreview: 'https://pageweave.dev/x' }] },
     ]
     const entries = buildFromHistory(history)
-    expect(entries.map((e) => e.kind)).toEqual(['user', 'assistant', 'tool'])
+    expect(entries.map((e) => e.kind)).toEqual(['user', 'assistant', 'tool', 'confirm'])
     const tool = entries[2]
     expect(tool?.kind === 'tool' && tool.tool.confirmUrl).toBe('https://pageweave.dev/x')
+    expect(entries[3]?.kind === 'confirm' && entries[3].url).toBe('https://pageweave.dev/x')
   })
 
   it('extractConfirmUrl picks the first allowlisted URL and strips trailing punctuation', () => {

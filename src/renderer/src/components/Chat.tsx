@@ -171,7 +171,6 @@ function ChatRow({ entry }: { entry: ChatEntry }): React.JSX.Element {
   }
   if (entry.kind === 'tool') {
     const running = entry.tool.status === 'running'
-    const confirmUrl = entry.tool.confirmUrl
     return (
       <details className="collapse collapse-arrow bg-base-200 text-xs" open={running}>
         <summary className="collapse-title min-h-8 py-1">
@@ -181,18 +180,6 @@ function ChatRow({ entry }: { entry: ChatEntry }): React.JSX.Element {
           <span className="text-xs">{entry.tool.name}</span>
         </summary>
         <div className="collapse-content">
-          {confirmUrl && (
-            <div className="mb-2 flex items-center gap-2">
-              <span>This change needs your confirmation.</span>
-              <button
-                type="button"
-                className="btn btn-primary btn-xs"
-                onClick={() => void window.pw.app.openExternal(confirmUrl)}
-              >
-                Review & confirm ↗
-              </button>
-            </div>
-          )}
           {entry.tool.outputPreview && (
             <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs opacity-80">
               {entry.tool.outputPreview}
@@ -200,6 +187,20 @@ function ChatRow({ entry }: { entry: ChatEntry }): React.JSX.Element {
           )}
         </div>
       </details>
+    )
+  }
+  if (entry.kind === 'confirm') {
+    return (
+      <div className="alert alert-warning py-2 text-sm" role="alert">
+        <span>This change needs your confirmation before it takes effect.</span>
+        <button
+          type="button"
+          className="btn btn-primary btn-xs"
+          onClick={() => void window.pw.app.openExternal(entry.url)}
+        >
+          Review & confirm ↗
+        </button>
+      </div>
     )
   }
   if (entry.kind === 'status') {
