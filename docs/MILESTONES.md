@@ -42,7 +42,9 @@ Tasks (done per DECISIONS D14):
 
 **Accept when (live, needs user machine + PageWeave account + model key):** "list my websites" → MCP `list_websites` over HTTPS with Bearer auth returns real sites; a page-editing prompt round-trips (`get_page` → `update_page`); confirmation workflow URLs surface in tool results; a long session compacts without breaking. Also measure directTools vs proxy prompt-token cost (D14). Automated coverage so far: 49 tests (envelope mapping, MCP config contract, skills/prompts, IPC contract incl. new engine kinds) + build (15.15 MB single-file engine chunk) + CI boot smoke.
 
-## M4 — Product UI (in progress — C1+C2+C3+C4 done 2026-09-18)
+## M4 — Product UI (in progress — C1–C5 done 2026-09-18)
+
+C5 shipped: Playwright `_electron` E2E (5 specs, `PW_E2E=1` IPC-boundary stubs with canned auth/model/sites/conversations/prompt events — engine still boots for real), CI `e2e` job under xvfb with artifact upload on failure. Confirmation workflow URLs render as standalone always-visible alert rows (not collapsed-card buttons).
 
 C4 shipped: `src/main/preview.ts` PreviewHost (WebContentsView, persist partition, hardened webPreferences, deny-all window-open, allowlist-fenced navigation, validated bounds IPC), renderer PreviewPane with rect streaming (ResizeObserver + rAF), dev-env URL load, manual/open-in-browser buttons, 2 s debounced auto-refresh on content-mutation tool events.
 
@@ -59,7 +61,7 @@ Tasks:
 4. First-run flow: sign in → connect model → pick/create site → chat. Copy targets non-technical users; recommend OpenRouter as the easy default in the connect flow (per D5).
 5. Replace debug console with product UI; Playwright `_electron` smoke E2E of the full loop.
 
-**Accept when:** E2E: fresh profile → sign in → connect key → create site via chat → prompt an edit → preview updates without manual refresh → confirmation card flow works.
+**Accept when:** E2E covers the stubbed loop end-to-end (done: fresh profile → sign in → connect → site select → canned prompt → confirmation card → preview chrome); **the live loop (real key + real site) remains a manual acceptance run** — sign in for real, prompt a real edit, watch the preview refresh without manual reload, surface a confirmation URL, measure directTools prompt cost (D14).
 
 ## M5 — Ship
 

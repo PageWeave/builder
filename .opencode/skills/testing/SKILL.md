@@ -57,3 +57,13 @@ await app.close() // ALWAYS — leaked processes break CI
 - Vitest Browser Mode guide: https://vitest.dev/guide/browser/ (stable since Vitest 4)
 - helpmetest.com Electron security testing (2026-05) — Playwright security assertions
 - Spectron is dead since Electron 24; Playwright is the replacement
+
+## Playwright _electron E2E (implemented in M4 C5)
+
+- Layout: `playwright.config.ts` (testDir `./e2e`, workers 1, no browser projects), `e2e/launch.ts` (single launch helper — pivot point if `_electron` ever moves to `@playwright/electron`), `e2e/app.spec.ts`. Run: `npm run test:e2e` (CI: `xvfb-run -a npx playwright test`). No browser downloads needed — the app's own Electron binary is the browser.
+- **Stub strategy**: `PW_E2E=1` env gate. Main isolates userData to tmpdir, and IPC-boundary stubs in `src/main/ipc.ts` (gated via `src/main/e2e.ts`) replace display/keyring/network-dependent pieces (sign-in, model persist, sites, conversations, prompt) with canned data. Canned engine events fan out through the REAL `EngineHost.emitTestEvents` listener pipeline. The engine process itself still boots for real (ping self-check holds).
+- **Per-test state**: `modelGetState` returns null until the stubbed connect flips the saved flag — first-run gates must stay honest. Each test launches a fresh app (workers 1).
+- **Native main-process APIs**: the official Playwright pattern is replacing methods via `electronApp.evaluate` (see their dialog-stub docs) — used to capture `shell.openExternal` calls; assert the captured URL.
+- **Locator gotchas learned**: `getByText` does NOT match text split across sibling spans (assert the specific node: the provider badge is `getByText('custom', { exact: true })`); duplicate phrases across visible + collapsed-card content cause strict-mode violations — keep canned output text distinct from UI copy; daisyUI `collapse` HIDES content when closed — never put user-critical actions (confirmation buttons) inside one.
+- **Known issue for M5**: E2E against a PACKAGED app requires the `EnableNodeCliInspectArguments` fuse NOT disabled (Playwright docs known-issues) — add to the M5 fuse checklist.
+- `_electron` deprecation watch continues (extraction to a CDP-based package was reverted upstream in #40733; Electron's own testing docs still recommend `_electron.launch`). The launcher helper isolates the pivot.
