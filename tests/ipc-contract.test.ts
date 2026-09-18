@@ -5,7 +5,9 @@ import {
   ENGINE_RESPONSE_KINDS,
   IpcChannel,
   type EngineRequest,
+  type EngineRequestKind,
   type EngineResponse,
+  type EngineResponseKind,
 } from '../src/shared/ipc'
 
 describe('IPC channel contract', () => {
@@ -17,8 +19,45 @@ describe('IPC channel contract', () => {
   })
 
   it('engine envelope kinds are paired and exhaustive', () => {
-    expect(ENGINE_REQUEST_KINDS).toEqual(['ping'])
-    expect(ENGINE_RESPONSE_KINDS).toEqual(['pong', 'error'])
+    expect(ENGINE_REQUEST_KINDS).toEqual([
+      'ping',
+      'configure',
+      'token-updated',
+      'open-session',
+      'prompt',
+      'steer',
+      'abort',
+      'list-models',
+    ])
+    expect(ENGINE_RESPONSE_KINDS).toEqual([
+      'pong',
+      'configured',
+      'token-updated',
+      'session',
+      'prompt',
+      'steer',
+      'abort',
+      'models',
+      'error',
+    ])
+  })
+
+  it('every engine request kind maps to a declared response kind', () => {
+    const REQUEST_TO_RESPONSE: Record<EngineRequestKind, EngineResponseKind> = {
+      ping: 'pong',
+      configure: 'configured',
+      'token-updated': 'token-updated',
+      'open-session': 'session',
+      prompt: 'prompt',
+      steer: 'steer',
+      abort: 'abort',
+      'list-models': 'models',
+    }
+    const responses = new Set<string>(ENGINE_RESPONSE_KINDS)
+    for (const [request, response] of Object.entries(REQUEST_TO_RESPONSE)) {
+      expect(ENGINE_REQUEST_KINDS).toContain(request)
+      expect(responses.has(response), `${request} → ${response}`).toBe(true)
+    }
   })
 
   it('ping envelope survives JSON round trip (structured-clone semantics)', () => {

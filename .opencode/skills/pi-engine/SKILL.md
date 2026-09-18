@@ -1,55 +1,93 @@
 ---
 name: pi-engine
-description: Embedding the Pi agent harness in this repo's utility process — @earendil-works/pi-coding-agent createAgentSession, pi-mcp-adapter createMcpAdapter with Bearer auth to PageWeave's MCP server, engine isolation rules, pinned engine versions, scope-rename churn, event bridge to renderer. Use when working in src/engine/, adding/upgrading any @earendil-works/* or pi-mcp-adapter dependency, wiring MCP tools, engine events, sessions, skills, or the system prompt (M3).
+description: Embedding the Pi agent harness in this repo's utility process (M3, implemented) — createAgentSession + ModelRuntime with in-memory BYOK keys, pi-mcp-adapter createMcpAdapter isolated config with env-interpolated bearer, per-website sessions, bundled skills, event bridge, single-file bundled engine chunk. Use when working in src/engine/, touching any @earendil-works/* or pi-mcp-adapter dependency, wiring MCP tools, engine events, sessions, skills, or the system prompt.
 ---
 
-# Pi engine embedding (M3)
+# Pi engine embedding (implemented in M3)
 
-Read first: `docs/ARCHITECTURE.md` § Utility process, `docs/DECISIONS.md` D3 + D10, `docs/RESEARCH.md` § 1, `docs/SPEC-PLATFORM.md` § MCP server.
+Read first: `docs/DECISIONS.md` D14, `src/engine/session.ts` (the owner), `docs/SPEC-PLATFORM.md` § MCP server.
+
+## Verified versions (exact pins, checked 2026-09-18)
+
+`@earendil-works/pi-coding-agent` 0.85.1 · `@earendil-works/pi-ai` 0.85.1 · `@earendil-works/pi-tui` 0.85.1 · `pi-mcp-adapter` 2.34.0. The scope was renamed once (`@mariozechner/*` → `@earendil-works/*`) — old posts/docs reference it. **pi-tui is now OUR direct dep** (adapter peer; pi-coding-agent no longer carries it). Upgrades are deliberate, tested changes; vendor `pi-mcp-adapter` into `vendor/` if it drifts (MIT, small).
 
 ## Isolation rules (R2 mitigation — non-negotiable)
 
-- **ALL `@earendil-works/*` and `pi-mcp-adapter` imports live behind `src/engine/`.** Main and renderer never import engine packages. Main knows only the MessagePort envelope (`src/shared/ipc.ts` + M3's `src/shared/engine-events.ts`).
-- Engine deps are **pinned exact** in package.json. Upgrades are deliberate, tested changes — the upstream renamed scopes once already (`@mariozechner/*` → `@earendil-works/*`); old docs/blog posts still reference the old scope. If a package drifts or breaks, vendor it into `vendor/` (pi-mcp-adapter is MIT and small) rather than blocking.
-- Versions verified 2026-09-16 (re-verify at M3): `@earendil-works/pi-coding-agent` 0.85.1, `@earendil-works/pi-ai` 0.85.1, `pi-mcp-adapter` 2.34.0. SDK docs: https://pi.dev/docs/latest/sdk — **confirm exact API shapes against current docs at implementation time; sketches in repo docs are from M0 research.**
+- **ALL `@earendil-works/*` and `pi-mcp-adapter` imports live behind `src/engine/`.** Main/renderer never import them. `pi-mcp-adapter` resolves to a typecheck stub via tsconfig.node `paths` (its package "types" entry is raw TS — real resolution would drag its source graph into our strict typecheck). Vite does NOT read tsconfig paths, so builds bundle the real package.
+- **The engine chunk must stay bundled**: `electron.vite.config.ts` main build has `externalizeDeps: false` + `inlineDynamicImports: true`. Externalizing crashes at runtime (adapter entry is raw TS; Node refuses type-stripping under node_modules), and code-split chunks broke the `__filename` shim (TDZ). Chunk ≈ 15 MB — that's the accepted cost (D14).
 
-## Session shape (per ARCHITECTURE sketch)
+## Session shape (as implemented in `src/engine/session.ts`)
 
-- `createAgentSession({ model, tools: ["read"], sessionManager, resourceLoader, systemPromptOverride })`.
-- Local tools: `read` ONLY. No edit/write/bash — site edits go through MCP (D10). Do not widen this without a DECISIONS entry.
-- `SessionManager` storage under userData (`app.getPath('userData')/sessions`) — never `~/.pi`; we own the whole environment. One Pi session per (website, conversation); site switch = session switch.
-- System prompt: `src/engine/prompt.ts`, versioned in repo (PageWeave Builder agent instructions — MCP-tool workflow, docs links, when to ask vs act, confirmation-card behavior).
-- Bundled PageWeave skills (SKILL.md set from SPEC-PLATFORM § Agent knowledge sources) via the resource loader — never from `~/.pi` or user dirs.
+```ts
+const runtime = await ModelRuntime.create({ credentials: new InMemoryCredentialStore() })
+await runtime.setRuntimeApiKey(provider, apiKey) // runtime-only, never persisted
+const loader = new DefaultResourceLoader({
+  cwd,                    // <userData>/work/<websiteId>
+  agentDir,               // <userData>/agent (PI_CODING_AGENT_DIR env set at runner creation)
+  settingsManager,        // SettingsManager.inMemory()
+  systemPromptOverride: () => buildSystemPrompt(),
+  agentsFilesOverride: () => ({ agentsFiles: [] }),   // never ambient AGENTS.md
+  extensionFactories,     // [createMcpAdapter({ config }), customProvider?]
+})
+const { session } = await createAgentSession({
+  cwd, agentDir, model, modelRuntime: runtime,
+  tools: ['read', 'grep'],             // read-only (D10 + D14 spill-file amendment)
+  sessionManager: SessionManager.create(cwd),
+  settingsManager, resourceLoader: loader,
+})
+session.subscribe((event) => forward(mapSessionEvents(event)))  // returns unsubscribe
+```
 
-## MCP wiring
+- BYOK built-ins (anthropic/openai/google/openrouter): key arrives via main's `configure` message → `setRuntimeApiKey`. Custom OpenAI-compatible: inline extension calls `pi.registerProvider('pw-custom', { baseUrl, apiKey, api: 'openai-completions', models: [...] })`; the `Model` object is constructed literally (contextWindow 128k, maxTokens 8192 defaults).
+- Model lists for the connect UI: `runtime.getAvailable()` filtered by provider (`model:list` request).
+- One session per website; re-configure (model change) closes the active session; main re-opens. Engine crash → EngineHost replays configure + open-session.
 
-- `createMcpAdapter({ mcpServers: { pageweave: { type: 'http', url, headers: { authorization: 'Bearer <token>' }, lifecycle: 'eager' } } })` — the isolated programmatic config for embedded hosts; do NOT read user-level `.mcp.json`.
-- Endpoint: `https://pageweave.dev/mcp` is a **CONFIRM item** (SPEC-PLATFORM) — verify against the Rails routes before M3 wires it.
-- Bearer token arrives from main (safeStorage) via spawn config / init message. The engine must never log it and never forward it to the renderer.
-- **`directTools: true` vs `"search"` is a measured M3 decision**: ~45 tools with lean descriptions; measure context cost both ways with the real server, record in DECISIONS.md.
-- App must tolerate unknown tools server-side (platform bumps its MCP server version independently).
+## MCP wiring (as implemented in `src/engine/mcp-config.ts`)
+
+```ts
+createMcpAdapter({
+  config: {
+    mcpServers: {
+      pageweave: {
+        url: 'https://pageweave.dev/mcp',
+        auth: 'bearer',
+        bearerToken: '${PW_ACCESS_TOKEN}',  // env-interpolated at CONNECT time
+        lifecycle: 'lazy',                  // short-lived connections
+        directTools: true,                  // D14; measure vs 'search' in acceptance
+        requestTimeoutMs: 120_000,
+      },
+    },
+    settings: { freezeDirectTools: true, sampling: false, elicitation: false, scriptMode: true, requestTimeoutMs: 120_000 },
+  },
+})
+```
+
+- **Token rotation**: config is an immutable snapshot — a literal token would die at the 1 h expiry. Main pushes `token-updated` → engine sets `process.env.PW_ACCESS_TOKEN` → each NEW connection re-interpolates. Lazy lifecycle keeps connections short; a connection alive across the expiry mark 401s once, then reconnects fresh.
+- Isolated `createMcpAdapter({ config })` never reads user `.mcp.json` / `~/.config/mcp` — verified in adapter source.
+- Sampling/elicitation are OFF: no embedded UI in v1 to answer those dialogs. `mcpScript` stays on (bulk operations).
+- Direct tools register from the metadata cache (`<agentDir>/mcp-cache.json` via PI_CODING_AGENT_DIR) — first session after install is proxy-only until the cache populates, then hot-loads.
 
 ## Event bridge
 
-- Subscribe to session events (text deltas, tool-call start/end, errors, confirmation/workflow URLs) → forward over MessagePort → main → renderer as typed envelopes (`src/shared/engine-events.ts`). Renderer renders ONLY from these events.
-- Confirmation workflow URLs surface as events → confirmation cards (D10) → `shell.openExternal` (browser, 6h expiry).
+`mapSessionEvents()` in `src/engine/events.ts` is the ONLY path from pi events to the renderer: typed, secret-free envelopes (`src/shared/engine-events.ts`), defensive against upstream shape changes (unknown events degrade to a status line). Tool results are truncated to `TOOL_OUTPUT_PREVIEW_MAX_CHARS`. Confirmation workflow URLs arrive inside tool results (server-side confirmations per D10) — M4 renders them as cards.
 
-## Engine ↔ main lifecycle
+## Engine ↔ main protocol
 
-- Spawn config (model choice, token, website context) via init MessagePort message at boot; engine replies `ready` (see M1's engine-host pattern: requestId correlation, timeout wrap, crash restart with backoff).
-- Compaction is Pi-internal; make sure a long session with compaction survives the event bridge (M3 acceptance covers this).
+Engine requests (requestId-correlated): ping · configure · token-updated · open-session · prompt · steer · abort · list-models. Per-kind timeouts in EngineHost (ping 5 s … configure/open-session/list-models 60 s; prompt responds on ACCEPTANCE — completion arrives as events). One-way notices: `{ kind: 'ready' }`, `{ kind: 'event', event }`. Paths (`agentDir`, `workDir`) ride the init envelope; secrets ride only in `configure`/`token-updated` payloads — never spawn args (ps-visible), never in logs.
 
 ## Red flags
 
-- `@earendil-works/*` imports outside `src/engine/`.
-- Floating (`^`) engine versions or casual `npm update`.
-- Token/key in engine logs, error messages, or renderer-bound events.
-- Writing to `~/.pi` or reading user-level MCP/skill config.
-- Building a parallel REST client for website data — MCP is the only data plane (SPEC-PLATFORM).
+- `@earendil-works/*` / `pi-mcp-adapter` imports outside `src/engine/`.
+- Floating (`^`) engine versions or casual `npm update`; forgetting pi-tui on a fresh install.
+- Re-enabling `externalizeDeps` or removing `inlineDynamicImports` on the main build.
+- Token/key in engine logs, error messages, renderer-bound events, or spawn args; a literal token in the adapter config.
+- Writing to `~/.pi` or reading user-level MCP/skill config (PI_CODING_AGENT_DIR + explicit agentDir keep us clean).
+- Importing `session.ts` into vitest tests (it loads the real pi graph — test the pure modules instead: events, mcp-config, skills, prompt).
+- Building a parallel REST client for website data — MCP is the only data plane.
 
 ## Sources
 
-- Pi SDK docs: https://pi.dev/docs/latest/sdk; repo: github.com/earendil-works/pi (MIT)
-- pi-mcp-adapter: https://pi.dev/packages/pi-mcp-adapter (createMcpAdapter, bearer interpolation, directTools modes)
+- Pi SDK docs: https://pi.dev/docs/latest/sdk (verified 2026-09-18; `ModelRuntime`, `DefaultResourceLoader` options, `SessionManager` factories, event list)
+- pi custom providers: `@earendil-works/pi-coding-agent` `docs/custom-provider.md` (npm package)
+- pi-mcp-adapter 2.34.0: package README + `dist/types.d.ts` + source (unpkg/jsdelivr) — createMcpAdapter snapshot semantics, bearer interpolation timing, output guard, lifecycle modes
 - Embedding precedent: OpenClaw https://open-claw.bot/docs/platforms/pi/
-- docs/RESEARCH.md § 1 (full candidate analysis + rename history)

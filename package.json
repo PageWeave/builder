@@ -20,10 +20,15 @@
     "start": "electron-vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:docs": "node scripts/sync-platform-docs.mjs"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1",
     "openid-client": "6.8.8",
+    "pi-mcp-adapter": "2.34.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

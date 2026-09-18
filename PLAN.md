@@ -1,6 +1,6 @@
 # PLAN.md — PageWeave Builder Master Plan
 
-Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-17 (M2).
+Entry point for any agent (or human) picking up this project. Keep this file updated as the source of truth for status and direction. Last updated: 2026-09-18 (M3).
 
 ## Vision
 
@@ -51,7 +51,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | M0 — repo + planning docs | ✅ done |
 | M1 — Electron skeleton + CI | ✅ done (2026-09-16) |
 | M2 — Auth (OAuth, token storage) | ✅ done (2026-09-17) — real-browser sign-in round-trip pending user acceptance run |
-| M3 — Engine (Pi + MCP + BYOK) | ⬜ next |
+| M3 — Engine (Pi + MCP + BYOK) | ✅ done (2026-09-18) — live acceptance run pending (needs model key + PageWeave account) |
+| M4 — Product UI | ⬜ next |
 | M3 — Engine (Pi + MCP adapter, BYOK UI, debug console) | ⬜ |
 | M4 — Product UI (chat, site picker, preview) | ⬜ |
 | M5 — Ship (signing, notarization, auto-update, installers) | ⬜ |
@@ -59,14 +60,13 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Full breakdown with acceptance criteria: [docs/MILESTONES.md](docs/MILESTONES.md).
 
-## Next actions (for the agent starting M3)
+## Next actions
 
-1. Read `docs/DECISIONS.md` (D12 pins, D13 auth), `docs/ARCHITECTURE.md`, then the `pi-engine` + `electron-ipc` skills.
-2. Add engine deps exact-pinned (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `pi-mcp-adapter` — re-verify current versions + API shapes against https://pi.dev/docs/latest/sdk first; see `docs/RESEARCH.md` § 1). Decide `externalizeDepsPlugin` vs bundling pi into the engine chunk by measurement; record in DECISIONS.
-3. Wire MCP: `createMcpAdapter` with `https://pageweave.dev/mcp` + Bearer from `AuthController.getAccessToken()`; token push to engine on refresh (R9). Measure `directTools: true` vs `"search"` context cost with the real ~45-tool server; record in DECISIONS.
-4. Website list (deferred from M2) surfaces via the engine's `list_websites`.
-5. BYOK: model-connect UI → safeStorage → engine; event bridge → `src/shared/engine-events.ts` typed envelopes; debug chat console for the M3 acceptance loop.
-6. Deferred user acceptance: real-browser sign-in round-trip of M2 (`npm run dev` on a display machine).
+1. **User acceptance run (M2 + M3 together, `npm run dev` on a display machine):**
+   - Sign in (M2 real-browser round-trip): sign-in → browser → signed in → restart (silent refresh) → sign out.
+   - Connect a model (OpenRouter easiest per D5), then in the debug console: "list my websites" → real MCP `list_websites`; a page-editing prompt → `get_page` → `update_page` round trip; confirmation workflow URL surfaces in a tool result; long session survives compaction.
+   - While there: note the prompt-token cost of the tool surface (directTools measurement for D14).
+2. M4 (product UI) per `docs/MILESTONES.md`: chat polish, site picker (list from `list_websites` via agent or engine surface), preview pane (WebContentsView + nav fence), first-run flow, Playwright `_electron` E2E.
 
 ## Non-goals (v1)
 

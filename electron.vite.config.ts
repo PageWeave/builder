@@ -23,8 +23,18 @@ function csp(): Plugin {
 export default defineConfig({
   main: {
     build: {
+      // DECISIONS D12/D14: bundle runtime deps (openid-client, pi packages,
+      // pi-mcp-adapter) into the main/engine chunks. pi-mcp-adapter ships raw
+      // TypeScript as its entry — Node cannot load it externalized, and a
+      // self-contained chunk needs no node_modules shipping at M5.
+      externalizeDeps: false,
       rollupOptions: {
         input: { index: 'src/main/index.ts' },
+        output: {
+          // Single file per entry: code-split chunk ordering broke the
+          // __filename shim with a TDZ error at engine boot.
+          inlineDynamicImports: true,
+        },
       },
     },
   },

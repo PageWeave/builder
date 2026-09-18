@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "pi-mcp-adapter": ["./src/engine/pi-mcp-adapter-stub.ts"]
+    }
   },
   "include": [
     "src/main/**/*.ts",

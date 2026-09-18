@@ -43,6 +43,13 @@ Hand-rolled type guards are fine at this scale; adopt zod only if payload comple
 - Preload `on`-style subscriptions (M3 event stream) MUST return an unsubscribe function; components clean up on unmount or listeners leak and double-fire.
 - Renderer never talks to MCP, providers, or the filesystem. Everything goes main ↔ engine.
 
+## Engine surface (M3, implemented)
+
+- Requests: `ping · configure · token-updated · open-session · prompt · steer · abort · list-models` — each with a paired response kind in `EngineResponse` (asserted by tests/ipc-contract.test.ts's request→response map). Per-kind timeouts live in `EngineHost.REQUEST_TIMEOUT_MS`; `prompt` responds on acceptance only — completion arrives as events, never as the response.
+- One-way notices (no requestId): `{ kind: 'ready' }` and `{ kind: 'event', event }` — EngineHost fans events out to listeners; main broadcasts to windows via `IpcChannel.engineEvent`. Renderer subscribes via `window.pw.engine.onEvent` (returns unsubscribe).
+- Secrets ride ONLY in `configure`/`token-updated` payloads over the MessagePort — never spawn args (ps-visible), never the init envelope, never the renderer.
+- Crash restart replays the last `configure` + `open-session` (EngineHost keeps both).
+
 ## Testing
 
 - Contract test: `tests/ipc-contract.test.ts` asserts channel constants + envelope-kind pairing from shared/ipc.ts.

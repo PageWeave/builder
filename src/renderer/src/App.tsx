@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AppVersions, AuthState, PongResponse } from '../../shared/ipc'
+import DebugConsole from './components/DebugConsole'
 
 type Versions = AppVersions
 
@@ -92,9 +93,8 @@ export default function App() {
           <p className="text-sm opacity-50">Site picker — M4</p>
         </aside>
 
-        <section className="bg-base-100 p-4">
-          <h2 className="mb-2 text-sm font-semibold uppercase opacity-60">Chat</h2>
-          <p className="text-sm opacity-50">Agent chat — M4</p>
+        <section className="flex flex-col bg-base-100">
+          <DebugConsole auth={auth} />
         </section>
 
         <section className="bg-base-100 p-4">

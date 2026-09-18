@@ -66,6 +66,7 @@ export class AuthController {
   private refreshPromise: Promise<void> | null = null
   private lastRegistrationAt = 0
   private readonly listeners = new Set<(state: AuthState) => void>()
+  private readonly tokenListeners = new Set<(accessToken: string | null) => void>()
 
   constructor(options: AuthControllerOptions) {
     this.store = new AuthStore(options.storePath, safeStorageEncryptor)
@@ -78,6 +79,23 @@ export class AuthController {
     return () => {
       this.listeners.delete(listener)
     }
+  }
+
+  /**
+   * Subscribes to access-token rotation (main → engine push, R9). Fires
+   * with the token after init/sign-in/refresh and with null on sign-out.
+   * Returns an unsubscribe function.
+   */
+  onAccessToken(listener: (accessToken: string | null) => void): () => void {
+    this.tokenListeners.add(listener)
+    return () => {
+      this.tokenListeners.delete(listener)
+    }
+  }
+
+  private notifyToken(): void {
+    const token = this.tokens && !isExpired(this.tokens) ? this.tokens.accessToken : null
+    for (const listener of this.tokenListeners) listener(token)
   }
 
   getState(): AuthState {
@@ -94,12 +112,14 @@ export class AuthController {
     this.tokens = persisted.tokens
     if (this.tokens && !isExpired(this.tokens)) {
       this.set({ status: 'signed-in' })
+      this.notifyToken()
       this.scheduleRefresh()
       return
     }
     if (this.tokens?.refreshToken && this.registration) {
       try {
         await this.refresh()
+        this.notifyToken()
         return
       } catch {
         // fall through to signed-out
@@ -134,6 +154,7 @@ export class AuthController {
     }
     this.tokens = null
     await this.store.save({ registration: this.registration, tokens: null })
+    this.notifyToken()
     this.set({ status: 'signed-out' })
     return this.state
   }
@@ -185,6 +206,7 @@ export class AuthController {
         this.tokens = tokenRecordFromResponse(response)
         await this.store.save({ registration: this.registration, tokens: this.tokens })
         this.scheduleRefresh()
+        this.notifyToken()
         this.set({ status: 'signed-in' })
       } finally {
         await loopback.close()
@@ -252,6 +274,7 @@ export class AuthController {
     const response = await refreshTokenGrant(config, refreshToken)
     this.tokens = tokenRecordFromResponse(response, Date.now(), refreshToken)
     await this.store.save({ registration: this.registration, tokens: this.tokens })
+    this.notifyToken()
   }
 
   private scheduleRefresh(): void {

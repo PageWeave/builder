@@ -31,16 +31,16 @@ Tasks:
 
 **Accept when:** fresh install → "Sign in" → browser → back in app signed in; token survives restart (silent refresh at boot); sign-out clears everything. Automated coverage: 28 unit/contract tests (PKCE S256 cross-check, state-forgery drop, loopback server behaviors incl. one-shot/timeout/escaping, store round-trip + unavailable-keyring refusal, refresh-token fallback) + CI boot smoke. **The real browser round-trip is a manual acceptance on a user machine** (CI is headless; browser required).
 
-## M3 — Engine (Pi + MCP + BYOK)
+## M3 — Engine (Pi + MCP + BYOK) ✅ (2026-09-18, acceptance run pending)
 
-Tasks:
-1. Engine module owns Pi: `createAgentSession` with minimal tools (`read` only), `SessionManager` in userData, bundled skills via custom resource loader, versioned `systemPromptOverride` (`src/engine/prompt.ts`).
-2. MCP: `pi-mcp-adapter` `createMcpAdapter` with isolated config (Bearer token from main). Evaluate `directTools: true` vs `"search"` — measure context cost with the real ~45-tool server; record decision in DECISIONS.md.
-3. BYOK: model-connect UI (renderer) → main (safeStorage) → engine (model + key). Providers: anthropic, openai, google, openrouter, custom OpenAI-compatible (baseURL + model id via pi `models.json` shape).
-4. Event bridge: Pi session events → MessagePort → main → renderer (typed envelope in `src/shared/engine-events.ts`).
-5. Debug chat console (temporary renderer view, no polish) to exercise the full loop.
+Tasks (done per DECISIONS D14):
+1. Engine module owns Pi: `createAgentSession` with `tools: ["read", "grep"]` (read+grep amendment to D10 — output-guard spill navigation), `SessionManager` under `<userData>/work/<websiteId>` with `PI_CODING_AGENT_DIR=<userData>/agent`, bundled skills synced from build-time `?raw` resources, versioned `systemPromptOverride` (`src/engine/prompt.ts` v1), empty `agentsFilesOverride` (no ambient AGENTS.md).
+2. MCP: `pi-mcp-adapter` `createMcpAdapter` isolated config (`auth: 'bearer'`, `bearerToken: '${PW_ACCESS_TOKEN}'` env-interpolated, `lifecycle: 'lazy'`), `directTools: true` + `freezeDirectTools: true`; token rotation via main → engine `token-updated` push. Sampling/elicitation off (no embedded UI); script tool on.
+3. BYOK: model-connect UI (provider/key/model; OpenRouter default per D5) → main safeStorage (`model.enc`) → engine `configure` → `ModelRuntime.setRuntimeApiKey` (in-memory only). Custom OpenAI-compatible endpoints via `pi.registerProvider` extension. `model:list` resolves availability in-engine via `getAvailable()`.
+4. Event bridge: Pi session events → typed renderer-safe envelopes (`src/shared/engine-events.ts`) → MessagePort notices → main → `engine:event` push. Engine requests: ping/configure/token-updated/open-session/prompt/steer/abort/list-models with per-kind timeouts; crash restart replays configure + session.
+5. Debug chat console (renderer): streaming transcript (text/thinking deltas, tool cards with output previews, status/error lines), abort, model-connect form, sign-in gate.
 
-**Accept when:** in debug console: "list my websites" → MCP `list_websites` tool call over HTTPS succeeds with Bearer auth and returns real sites; a page-editing prompt round-trips (`get_page` → `update_page`); confirmation workflow URLs surface as events; compaction doesn't break a long session.
+**Accept when (live, needs user machine + PageWeave account + model key):** "list my websites" → MCP `list_websites` over HTTPS with Bearer auth returns real sites; a page-editing prompt round-trips (`get_page` → `update_page`); confirmation workflow URLs surface in tool results; a long session compacts without breaking. Also measure directTools vs proxy prompt-token cost (D14). Automated coverage so far: 49 tests (envelope mapping, MCP config contract, skills/prompts, IPC contract incl. new engine kinds) + build (15.15 MB single-file engine chunk) + CI boot smoke.
 
 ## M4 — Product UI
 

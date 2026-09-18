@@ -2,8 +2,9 @@ import { BrowserWindow, app, session, shell } from 'electron'
 import { join } from 'node:path'
 import { AuthController } from './auth/controller'
 import { EngineHost } from './engine-host'
+import { ModelStore, safeStorageModelEncryptor } from './models/store'
 import { IpcChannel } from '../shared/ipc'
-import { registerIpcHandlers } from './ipc'
+import { registerIpcHandlers, syncModelToEngine } from './ipc'
 import { mainWindowOptions } from './window'
 
 // Sandbox every renderer globally, not per-window opt-in.
@@ -11,6 +12,7 @@ app.enableSandbox()
 
 const engineHost = new EngineHost()
 let auth: AuthController | null = null
+let models: ModelStore | null = null
 const smokeMode = process.env.PW_SMOKE === '1'
 
 function createWindow(): BrowserWindow {
@@ -45,28 +47,63 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+/** Applies the persisted model + current token to the engine and opens the M3 debug session. */
+async function syncEngineState(): Promise<void> {
+  if (!models) return
+  try {
+    await syncModelToEngine(engineHost, models)
+  } catch (err) {
+    // Expected on first run (no model yet) — the connect UI handles the rest.
+    console.log(`[pw] engine state not applied yet: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
 void app.whenReady().then(() => {
   // Deny-all permission requests and checks on the default session.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
 
-  auth = new AuthController({ storePath: join(app.getPath('userData'), 'auth.enc') })
+  const userData = app.getPath('userData')
+  auth = new AuthController({ storePath: join(userData, 'auth.enc') })
+  models = new ModelStore(join(userData, 'model.enc'), safeStorageModelEncryptor)
+
   auth.onState((state) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) win.webContents.send(IpcChannel.authStateChanged, state)
     }
   })
 
-  registerIpcHandlers(engineHost, auth)
-  engineHost.start()
+  // Token rotation → engine (MCP bearer freshness; see RISKS R9).
+  auth.onAccessToken((accessToken) => {
+    void engineHost.pushToken({ accessToken }).catch((err: unknown) => {
+      console.error(`[pw] engine token push failed: ${String(err)}`)
+    })
+  })
+
+  // Engine streaming events → every renderer window.
+  engineHost.onEvent((event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IpcChannel.engineEvent, event)
+    }
+  })
+
+  registerIpcHandlers(engineHost, auth, models)
+  engineHost.start({
+    agentDir: join(userData, 'agent'),
+    workDir: join(userData, 'work'),
+  })
   createWindow()
   console.log('[pw] window created')
 
   // Restore persisted auth (local file + refresh if needed). Network only
   // happens when a previous session left a refresh token behind.
-  void auth.init().catch((err: unknown) => {
-    console.error(`[pw] auth init failed: ${String(err)}`)
-  })
+  void auth
+    .init()
+    .then(() => models!.load())
+    .then(() => syncEngineState())
+    .catch((err: unknown) => {
+      console.error(`[pw] startup state restore failed: ${String(err)}`)
+    })
 
   // Startup self-check of the full renderer→main→engine loop. Also the CI
   // smoke signal (PW_SMOKE=1 quits right after).

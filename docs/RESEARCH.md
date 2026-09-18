@@ -9,8 +9,10 @@ Done 2026-09-16 via web research so future sessions don't re-research. Facts are
 - Packages: `@earendil-works/pi-ai` (multi-provider LLM), `pi-agent-core` (loop/tools), `pi-coding-agent` (full SDK: `createAgentSession`, SessionManager, SettingsManager, skills/ResourceLoader, `systemPromptOverride`, custom tools, `streamFn` middleware), `pi-tui` (not needed — we have our own UI).
 - **Package rename history**: `@mariozechner/*` → `@earendil-works/*`. Old docs/blog posts reference the old scopes.
 - Embedding precedent: **OpenClaw** (multi-channel consumer agent product) embeds pi exactly the way we will: https://open-claw.bot/docs/platforms/pi/ and https://nader.substack.com/p/how-to-build-a-custom-agent-framework
-- SDK docs: https://pi.dev/docs/latest/sdk
-- Deliberate omissions: no MCP, no subagents, no plan mode, no built-in todo/permission system (minimal-by-design; extensions cover gaps).
+- SDK docs: https://pi.dev/docs/latest/sdk — **re-verified 2026-09-18 at implementation time (M3)**: `ModelRuntime` owns credentials + catalogs (`setRuntimeApiKey` is runtime-only, never persisted; `InMemoryCredentialStore` avoids auth.json entirely); `DefaultResourceLoader` takes `systemPromptOverride` / `skillsOverride` / `agentsFilesOverride` / `extensionFactories` constructor options; session events arrive via `session.subscribe` (message_update deltas, tool_execution_*, turn/agent lifecycle, compaction/retry/queue events); custom providers register programmatically via `pi.registerProvider` (no models.json files needed).
+- pi-tui: pi-coding-agent 0.85.1 no longer depends on it, but pi-mcp-adapter peer-requires and VALUE-imports it — we install `@earendil-works/pi-tui@0.85.1` directly.
+- pi-mcp-adapter packaging quirk: package entry + "types" are raw TypeScript source (only `./types`, `./config`, `./metadata-cache` ship compiled). Consequences: must be bundled (D14), and typecheck uses a local stub via tsconfig `paths`.
+- Deliberate omissions: no MCP in core, no subagents, no plan mode, no built-in todo/permission system (minimal-by-design; extensions cover gaps).
 
 ### Pi MCP adapters (third-party, MIT)
 - **`pi-mcp-adapter`** (CHOSEN): https://pi.dev/packages/pi-mcp-adapter — streamable-http/SSE/stdio, bearer headers (`authorization: Bearer ${ENV_VAR}` interpolation), OAuth for MCP servers, `directTools: true | "search"` modes, **`createMcpAdapter`** = isolated programmatic config snapshot for SDK embeddings (exactly our case), reads standard `.mcp.json`/`~/.config/mcp/mcp.json` shapes, MCP protocol negotiation options.
