@@ -64,7 +64,7 @@ export function e2ePromptEvents(): EngineEvent[] {
       callId: 'e2e-t1',
       name: 'mcp__pageweave__update_page',
       isError: false,
-      outputPreview: 'This change needs your confirmation: https://pageweave.dev/workflow/confirm/e2e',
+      outputPreview: 'update applied — review: https://pageweave.dev/workflow/confirm/e2e',
     },
     { type: 'text_delta', delta: 'done!' },
     { type: 'agent_end' },
