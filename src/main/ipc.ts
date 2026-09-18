@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import {
-  DEBUG_WEBSITE_ID,
   IpcChannel,
   isModelProvider,
   type AppVersions,
@@ -119,15 +118,15 @@ function parseWebsiteScope(req: unknown): { websiteId: string } {
 }
 
 /**
- * Pushes the persisted model config into the engine and reopens the debug
- * session when a full model is configured. A null model clears the
- * engine-side model.
+ * Pushes the persisted model config into the engine and reopens the last
+ * session scope (debug scope until the user picks a site at M4). A null
+ * model clears the engine-side model.
  */
 export async function syncModelToEngine(engineHost: EngineHost, models: ModelStore): Promise<ModelConfigView> {
   const config = models.get()
   await engineHost.configure({ model: config ?? null })
   if (config?.modelId) {
-    await engineHost.openSession({ websiteId: DEBUG_WEBSITE_ID })
+    await engineHost.reopenLastSession()
   }
   return models.view()
 }

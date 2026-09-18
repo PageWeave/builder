@@ -25,14 +25,33 @@ function nextEntryId(): number {
   return entrySeq
 }
 
-export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.Element {
+export interface OutgoingMessage {
+  text: string
+  nonce: number
+}
+
+interface DebugConsoleProps {
+  auth: AuthState
+  modelConnected: boolean
+  modelFormOpen: boolean
+  onModelFormOpen: (open: boolean) => void
+  /** Messages injected from the shell (e.g. guided create-site flow). */
+  outgoing: OutgoingMessage | null
+}
+
+export default function DebugConsole({
+  auth,
+  modelConnected,
+  modelFormOpen,
+  onModelFormOpen,
+  outgoing,
+}: DebugConsoleProps): React.JSX.Element {
   const [entries, setEntries] = useState<Entry[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [promptError, setPromptError] = useState<string | null>(null)
   const [modelConfig, setModelConfig] = useState<ModelConfigView>(null)
-  const [showModelForm, setShowModelForm] = useState(false)
   const [provider, setProvider] = useState<ModelProvider>('openrouter')
   const [modelId, setModelId] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
@@ -41,6 +60,7 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
   const [modelBusy, setModelBusy] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const lastOutgoingNonce = useRef(0)
 
   const pushEntry = useCallback((entry: Omit<Entry, 'id'>) => {
     setEntries((prev) => [...prev, { ...entry, id: nextEntryId() }])
@@ -49,7 +69,6 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
   useEffect(() => {
     void window.pw.models.getState().then((config) => {
       setModelConfig(config)
-      if (!config) setShowModelForm(true)
     })
     const unsubscribeModel = window.pw.models.onChanged(setModelConfig)
     const unsubscribeEvents = window.pw.engine.onEvent((event: EngineEvent) => {
@@ -115,18 +134,33 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [entries])
 
-  const send = useCallback(async () => {
-    const text = input.trim()
-    if (!text || busy) return
-    setPromptError(null)
-    pushEntry({ kind: 'user', text })
+  const sendText = useCallback(
+    async (text: string): Promise<void> => {
+      const trimmed = text.trim()
+      if (!trimmed || busy) return
+      setPromptError(null)
+      pushEntry({ kind: 'user', text: trimmed })
+      try {
+        await window.pw.engine.prompt({ text: trimmed })
+      } catch (err) {
+        setPromptError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [busy, pushEntry],
+  )
+
+  const send = useCallback(async (): Promise<void> => {
+    const text = input
     setInput('')
-    try {
-      await window.pw.engine.prompt({ text })
-    } catch (err) {
-      setPromptError(err instanceof Error ? err.message : String(err))
-    }
-  }, [input, busy, pushEntry])
+    await sendText(text)
+  }, [input, sendText])
+
+  /* Messages injected from the shell (guided create-site flow). */
+  useEffect(() => {
+    if (!outgoing || outgoing.nonce === lastOutgoingNonce.current) return
+    lastOutgoingNonce.current = outgoing.nonce
+    void sendText(outgoing.text)
+  }, [outgoing, sendText])
 
   const abort = useCallback(async () => {
     try {
@@ -144,7 +178,7 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
         const config = await window.pw.models.save(patch)
         setModelConfig(config)
         if (config?.modelId) {
-          setShowModelForm(false)
+          onModelFormOpen(false)
           setApiKey('')
         }
       } catch (err) {
@@ -153,7 +187,7 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
         setModelBusy(false)
       }
     },
-    [],
+    [onModelFormOpen],
   )
 
   const fetchModels = useCallback(async () => {
@@ -180,13 +214,12 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
       setBaseUrl('')
       setApiKey('')
       setModelOptions([])
-      setShowModelForm(true)
+      onModelFormOpen(true)
     } finally {
       setModelBusy(false)
     }
-  }, [])
+  }, [onModelFormOpen])
 
-  const modelConnected = modelConfig !== null && modelConfig.modelId !== undefined
   const agentReady = auth.status === 'signed-in' && modelConnected && sessionId !== null
 
   return (
@@ -194,10 +227,10 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
       {/* Debug toolbar */}
       <div className="flex items-center gap-2 border-b border-base-300 px-3 py-1.5 text-xs">
         <span className="font-semibold uppercase opacity-60">Debug console</span>
-        <span className="badge badge-ghost badge-sm">{modelConnected ? modelConfig.provider : 'no model'}</span>
+        <span className="badge badge-ghost badge-sm">{modelConnected ? modelConfig?.provider : 'no model'}</span>
         {sessionId && <span className="badge badge-ghost badge-sm">session {sessionId.slice(0, 8)}</span>}
         <div className="ml-auto flex gap-1">
-          <button type="button" className="btn btn-ghost btn-xs" onClick={() => setShowModelForm((v) => !v)}>
+          <button type="button" className="btn btn-ghost btn-xs" onClick={() => onModelFormOpen(!modelFormOpen)}>
             Model…
           </button>
           {modelConnected && (
@@ -209,7 +242,7 @@ export default function DebugConsole({ auth }: { auth: AuthState }): React.JSX.E
       </div>
 
       {/* Model connect form */}
-      {showModelForm && (
+      {modelFormOpen && (
         <div className="border-b border-base-300 bg-base-200 px-3 py-3">
           <div className="grid grid-cols-2 gap-2">
             <label className="form-control">

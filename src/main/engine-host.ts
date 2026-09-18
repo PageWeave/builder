@@ -24,6 +24,7 @@ import type {
   TokenUpdatedRequest,
 } from '../shared/ipc'
 import type { EngineEvent, EngineNotice } from '../shared/engine-events'
+import { DEBUG_WEBSITE_ID } from '../shared/ipc'
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000] as const
 const STABLE_UPTIME_MS = 30_000
@@ -117,10 +118,10 @@ export class EngineHost {
     return payload
   }
 
-  /** Re-opens the last session scope (after configure or crash restart). */
+  /** Re-opens the last session scope; falls back to the debug scope (after configure or crash restart). */
   async reopenLastSession(): Promise<OpenSessionResponse | null> {
-    if (!this.lastSession || !this.port) return null
-    return this.openSession(this.lastSession)
+    if (this.lastSession) return this.openSession(this.lastSession)
+    return this.openSession({ websiteId: DEBUG_WEBSITE_ID })
   }
 
   async prompt(req: PromptRequest): Promise<PromptResponse> {
