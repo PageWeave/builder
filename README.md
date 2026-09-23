@@ -9,8 +9,11 @@ Desktop app for building websites on [PageWeave](https://pageweave.dev) with a l
 Requirements: Node >= 22.12 (see `.nvmrc`), npm.
 
 ```bash
-npm install                              # install-script allowlist (esbuild, electron) is pre-approved in package.json
+npm install
 npm run dev                              # electron-vite dev server + app window
+```
+
+If `npm run dev` fails with `Error: Electron uninstall`, electron's binary-download postinstall was skipped or failed — run `node node_modules/electron/install.js` (or `npm install-scripts approve electron && npm ci` when your npm gates install scripts; the allowlist in package.json pre-approves esbuild + electron), then retry.
 npm run lint && npm run typecheck && npm run test && npm run build
 ```
 
